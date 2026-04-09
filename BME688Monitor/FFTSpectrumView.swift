@@ -5,14 +5,14 @@ enum SpectrumColorScheme: Int, CaseIterable {
     case klassik = 0
     case thermal = 1
     case neon = 2
-    case aurora = 3
+    case polar = 3
 
     var label: String {
         switch self {
         case .klassik: return "Klassik"
         case .thermal: return "Thermal"
         case .neon: return "Neon"
-        case .aurora: return "Aurora"
+        case .polar: return "Polar"
         }
     }
 }
@@ -51,13 +51,23 @@ struct FFTSpectrumView: View {
                         let freqRes = sampleRate / Double(fft.bins * 2)
 
                         if data.count > 2 {
-                            spectrumChart(data: data, freqRes: freqRes)
-                                .frame(height: 300)
-                                .padding(12)
-                                .background {
-                                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                        .fill(.ultraThinMaterial)
-                                }
+                            if colorScheme == .polar {
+                                polarView(data: data, freqRes: freqRes)
+                                    .frame(height: 320)
+                                    .padding(12)
+                                    .background {
+                                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                            .fill(.ultraThinMaterial)
+                                    }
+                            } else {
+                                spectrumChart(data: data, freqRes: freqRes)
+                                    .frame(height: 300)
+                                    .padding(12)
+                                    .background {
+                                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                            .fill(.ultraThinMaterial)
+                                    }
+                            }
 
                             let peak = interpolatedPeak(data)
                             let peakFreq = peak.bin * freqRes
@@ -94,11 +104,170 @@ struct FFTSpectrumView: View {
         case .klassik: return .orange
         case .thermal: return .red
         case .neon: return .cyan
-        case .aurora: return .green
+        case .polar: return .blue
         }
     }
 
-    // MARK: - Chart
+    // MARK: - Polar Radial View
+
+    @ViewBuilder
+    private func polarView(data: [Double], freqRes: Double) -> some View {
+        let maxFreq = Double(data.count) * freqRes
+        let peaks = findTop3Peaks(data)
+
+        VStack(spacing: 4) {
+            HStack {
+                Text("Polar-Spektrum")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("0 \u{2013} \(String(format: "%.2f", maxFreq)) Hz")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+
+            Canvas { context, size in
+                let cx = size.width / 2
+                let cy = size.height / 2
+                let maxR = min(cx, cy) - 24
+                let minR: CGFloat = 12 // center hole
+
+                // dB grid circles
+                for db in stride(from: -80, through: 0, by: 20) {
+                    let norm = CGFloat((Double(db) + 80) / 80)
+                    let r = minR + norm * (maxR - minR)
+                    let circle = Path(ellipseIn: CGRect(x: cx - r, y: cy - r, width: r * 2, height: r * 2))
+                    context.stroke(circle, with: .color(.secondary.opacity(0.15)), lineWidth: 0.5)
+                    // dB label
+                    let labelPt = CGPoint(x: cx + 4, y: cy - r - 1)
+                    context.draw(Text("\(db)").font(.system(size: 8)).foregroundColor(.secondary.opacity(0.5)), at: labelPt, anchor: .bottomLeading)
+                }
+
+                // 0 dB outer ring (stronger)
+                let outerCircle = Path(ellipseIn: CGRect(x: cx - maxR, y: cy - maxR, width: maxR * 2, height: maxR * 2))
+                context.stroke(outerCircle, with: .color(.secondary.opacity(0.3)), lineWidth: 1)
+
+                // Radial frequency axis lines (every 90 degrees)
+                let count = data.count
+                for q in 0..<4 {
+                    let angle = Double(q) * .pi / 2 - .pi / 2
+                    let x1 = cx + minR * CGFloat(cos(angle))
+                    let y1 = cy + minR * CGFloat(sin(angle))
+                    let x2 = cx + maxR * CGFloat(cos(angle))
+                    let y2 = cy + maxR * CGFloat(sin(angle))
+                    var line = Path()
+                    line.move(to: CGPoint(x: x1, y: y1))
+                    line.addLine(to: CGPoint(x: x2, y: y2))
+                    context.stroke(line, with: .color(.secondary.opacity(0.15)), lineWidth: 0.5)
+
+                    // Freq labels at quadrant points
+                    let freqAtQ = maxFreq * Double(q) / 4.0
+                    let lx = cx + (maxR + 14) * CGFloat(cos(angle))
+                    let ly = cy + (maxR + 14) * CGFloat(sin(angle))
+                    context.draw(
+                        Text(String(format: "%.2f", freqAtQ)).font(.system(size: 9)).foregroundColor(.secondary.opacity(0.6)),
+                        at: CGPoint(x: lx, y: ly),
+                        anchor: .center
+                    )
+                }
+
+                // Build filled path + line path
+                var fillPath = Path()
+                var linePath = Path()
+
+                for i in 1..<count {
+                    let angle = Double(i) / Double(count) * 2 * .pi - .pi / 2
+                    let norm = CGFloat(max(0, (data[i] + 80) / 80))
+                    let r = minR + norm * (maxR - minR)
+                    let pt = CGPoint(x: cx + r * CGFloat(cos(angle)), y: cy + r * CGFloat(sin(angle)))
+
+                    if i == 1 {
+                        fillPath.move(to: CGPoint(x: cx + minR * CGFloat(cos(angle)), y: cy + minR * CGFloat(sin(angle))))
+                        fillPath.addLine(to: pt)
+                        linePath.move(to: pt)
+                    } else {
+                        fillPath.addLine(to: pt)
+                        linePath.addLine(to: pt)
+                    }
+                }
+
+                // Close fill path back through center ring
+                let lastAngle = Double(count - 1) / Double(count) * 2 * .pi - .pi / 2
+                fillPath.addLine(to: CGPoint(x: cx + minR * CGFloat(cos(lastAngle)), y: cy + minR * CGFloat(sin(lastAngle))))
+                // Arc back along inner circle
+                for i in stride(from: count - 1, through: 1, by: -1) {
+                    let angle = Double(i) / Double(count) * 2 * .pi - .pi / 2
+                    fillPath.addLine(to: CGPoint(x: cx + minR * CGFloat(cos(angle)), y: cy + minR * CGFloat(sin(angle))))
+                }
+                fillPath.closeSubpath()
+
+                // Close line path
+                let firstAngle = 1.0 / Double(count) * 2 * .pi - .pi / 2
+                let firstNorm = CGFloat(max(0, (data[1] + 80) / 80))
+                let firstR = minR + firstNorm * (maxR - minR)
+                linePath.addLine(to: CGPoint(x: cx + firstR * CGFloat(cos(firstAngle)), y: cy + firstR * CGFloat(sin(firstAngle))))
+
+                // Draw filled area with radial gradient
+                context.fill(fillPath, with: .radialGradient(
+                    Gradient(stops: [
+                        .init(color: Color.blue.opacity(0.02), location: 0),
+                        .init(color: Color.cyan.opacity(0.15), location: 0.3),
+                        .init(color: Color.blue.opacity(0.25), location: 0.6),
+                        .init(color: Color.purple.opacity(0.4), location: 0.85),
+                        .init(color: Color.pink.opacity(0.5), location: 1.0),
+                    ]),
+                    center: CGPoint(x: cx, y: cy),
+                    startRadius: minR,
+                    endRadius: maxR
+                ))
+
+                // Draw spectrum line
+                context.stroke(linePath, with: .linearGradient(
+                    Gradient(colors: [.cyan, .blue, .purple, .pink, .cyan]),
+                    startPoint: CGPoint(x: 0, y: 0),
+                    endPoint: CGPoint(x: size.width, y: size.height)
+                ), lineWidth: 1.5)
+
+                // Peak markers as small diamonds
+                for peak in peaks {
+                    let angle = Double(peak.bin) / Double(count) * 2 * .pi - .pi / 2
+                    let norm = CGFloat(max(0, (peak.dB + 80) / 80))
+                    let r = minR + norm * (maxR - minR)
+                    let px = cx + r * CGFloat(cos(angle))
+                    let py = cy + r * CGFloat(sin(angle))
+                    let sz: CGFloat = peak.rank == 0 ? 6 : 4
+
+                    var diamond = Path()
+                    diamond.move(to: CGPoint(x: px, y: py - sz))
+                    diamond.addLine(to: CGPoint(x: px + sz, y: py))
+                    diamond.addLine(to: CGPoint(x: px, y: py + sz))
+                    diamond.addLine(to: CGPoint(x: px - sz, y: py))
+                    diamond.closeSubpath()
+
+                    context.fill(diamond, with: .color(.white))
+                    if peak.rank == 0 {
+                        // Glow for strongest peak
+                        context.fill(diamond, with: .color(.white.opacity(0.5)))
+                    }
+                }
+
+                // Center label
+                context.draw(
+                    Text("-80").font(.system(size: 8)).foregroundColor(.secondary.opacity(0.4)),
+                    at: CGPoint(x: cx, y: cy),
+                    anchor: .center
+                )
+            }
+            .frame(maxWidth: .infinity)
+
+            Text("Frequenz im Uhrzeigersinn, Amplitude = Radius")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
+    }
+
+    // MARK: - Linear Chart
 
     @ViewBuilder
     private func spectrumChart(data: [Double], freqRes: Double) -> some View {
@@ -154,7 +323,6 @@ struct FFTSpectrumView: View {
                 .lineStyle(StrokeStyle(lineWidth: lineWidth))
             }
 
-            // 3 peak markers
             ForEach(peaks, id: \.bin) { peak in
                 PointMark(
                     x: .value("Freq", Double(peak.bin) * freqRes),
@@ -165,7 +333,6 @@ struct FFTSpectrumView: View {
                 .foregroundStyle(peakColor)
             }
 
-            // Cursor
             if showCursor {
                 let cursorBin = max(1, min(Int(round(safeCursorFreq / freqRes)), data.count - 1))
                 let cursorDb = data[cursorBin]
@@ -209,7 +376,6 @@ struct FFTSpectrumView: View {
             }
         }
         .chartLegend(.hidden)
-        .opacity(cursorVisible ? 1.0 : 1.0) // keep chart always visible
         .overlay(alignment: .topLeading) {
             if showCursor {
                 cursorOverlay(data: data, freqRes: freqRes)
@@ -226,7 +392,7 @@ struct FFTSpectrumView: View {
         case .klassik: return .white
         case .thermal: return .yellow
         case .neon: return .mint
-        case .aurora: return .white
+        case .polar: return .white
         }
     }
 
@@ -279,13 +445,11 @@ struct FFTSpectrumView: View {
                             if let freq: Double = proxy.value(atX: x) {
                                 cursorFreq = freq
                                 cursorVisible = true
-                                // Cancel pending fade
                                 fadeTask?.cancel()
                                 fadeTask = nil
                             }
                         }
                         .onEnded { _ in
-                            // Wait 1.5s, then quick fade
                             fadeTask?.cancel()
                             fadeTask = Task { @MainActor in
                                 try? await Task.sleep(for: .seconds(1.5))
@@ -303,7 +467,7 @@ struct FFTSpectrumView: View {
         switch colorScheme {
         case .klassik: return .orange
         case .thermal, .neon: return .white.opacity(0.55)
-        case .aurora: return .white.opacity(0.5)
+        case .polar: return .cyan
         }
     }
 
@@ -337,15 +501,6 @@ struct FFTSpectrumView: View {
                 .init(color: Color(red: 0.31, green: 0, blue: 0.63).opacity(0.5), location: 0.33),
                 .init(color: Color(red: 0, green: 0.86, blue: 0.78).opacity(0.55), location: 0.66),
                 .init(color: Color(red: 1, green: 1, blue: 0.9).opacity(0.7), location: 1.0),
-            ]
-        case .aurora:
-            return [
-                .init(color: Color(red: 0, green: 0.05, blue: 0.1).opacity(0.05), location: 0.0),
-                .init(color: Color(red: 0, green: 0.5, blue: 0.3).opacity(0.45), location: 0.25),
-                .init(color: Color(red: 0, green: 0.8, blue: 0.6).opacity(0.5), location: 0.45),
-                .init(color: Color(red: 0.1, green: 0.6, blue: 0.9).opacity(0.55), location: 0.65),
-                .init(color: Color(red: 0.4, green: 0.3, blue: 0.9).opacity(0.6), location: 0.85),
-                .init(color: Color(red: 0.7, green: 0.4, blue: 1.0).opacity(0.7), location: 1.0),
             ]
         default:
             return [
@@ -404,7 +559,6 @@ struct FFTSpectrumView: View {
     private func findTop3Peaks(_ data: [Double]) -> [PeakMarker] {
         guard data.count > 3 else { return [] }
 
-        // Find local maxima (bin where data[i] > data[i-1] and data[i] > data[i+1])
         var localMaxima: [(bin: Int, dB: Double)] = []
         for i in 1..<(data.count - 1) {
             if data[i] > data[i - 1] && data[i] > data[i + 1] && data[i] > -75 {
@@ -412,7 +566,6 @@ struct FFTSpectrumView: View {
             }
         }
 
-        // Sort by amplitude descending, take top 3
         localMaxima.sort { $0.dB > $1.dB }
         let top = localMaxima.prefix(3)
 
