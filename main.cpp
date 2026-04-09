@@ -392,7 +392,49 @@ static void save_web_data(const BME688Data& vals, const SensorHistory& hist,
     for (int i = 0; i < n_hist; i++) fprintf(f, "%s%.2f", i ? "," : "", hist.humidity[start + i]);
     fprintf(f, "],\n    \"pressure\": [");
     for (int i = 0; i < n_hist; i++) fprintf(f, "%s%.2f", i ? "," : "", hist.pressure[start + i]);
-    fprintf(f, "]\n  }\n}\n");
+    fprintf(f, "]\n  },\n");
+
+    // FFT spectrum data (computed from chart-rate 2Hz data)
+    float sample_rate = 2.0f;
+    const char* fft_names[] = {"temperature", "humidity", "pressure"};
+    const std::deque<float>* fft_sources[] = {&hist.temperature, &hist.humidity, &hist.pressure};
+    fprintf(f, "  \"fft\": {\n");
+    fprintf(f, "    \"sample_rate\": %.1f,\n", sample_rate);
+    fprintf(f, "    \"bins\": %d,\n", FFT_N / 2);
+    for (int ch = 0; ch < 3; ch++) {
+        const std::deque<float>& src = *fft_sources[ch];
+        int sn = (int)src.size();
+        fprintf(f, "    \"%s\": [", fft_names[ch]);
+        if (sn >= 16) {
+            int use_n = std::min(sn, FFT_N);
+            Complex buf[FFT_N] = {};
+            float mean = 0;
+            for (int i = 0; i < use_n; i++) mean += src[sn - use_n + i];
+            mean /= use_n;
+            for (int i = 0; i < use_n; i++) {
+                float w = 0.5f * (1.0f - cosf(2.0f * (float)M_PI * i / (use_n - 1)));
+                buf[i] = {(src[sn - use_n + i] - mean) * w, 0};
+            }
+            fft(buf, FFT_N, false);
+            int num_bins = FFT_N / 2;
+            float max_mag = 0;
+            float mags[FFT_N / 2];
+            for (int i = 1; i < num_bins; i++) {
+                mags[i] = sqrtf(buf[i].re * buf[i].re + buf[i].im * buf[i].im) * 2.0f / FFT_N;
+                if (mags[i] > max_mag) max_mag = mags[i];
+            }
+            mags[0] = 0;
+            if (max_mag < 1e-9f) max_mag = 1e-9f;
+            // Output dB values (capped at -80dB)
+            for (int i = 0; i < num_bins; i++) {
+                float db = mags[i] > 1e-12f ? 20.0f * log10f(mags[i] / max_mag) : -80.0f;
+                if (db < -80.0f) db = -80.0f;
+                fprintf(f, "%s%.1f", i ? "," : "", db);
+            }
+        }
+        fprintf(f, "]%s\n", ch < 2 ? "," : "");
+    }
+    fprintf(f, "  }\n}\n");
     fclose(f);
     rename(tmp_path, WEB_DATA_PATH);
 }

@@ -11,12 +11,26 @@ struct LiveData: Codable {
     let weather: WeatherData
     let settings: SettingsData
     let history: HistoryArrays
+    let fft: FFTData?
 
     enum CodingKeys: String, CodingKey {
         case timestamp
         case demoMode = "demo_mode"
         case sensorOk = "sensor_ok"
-        case current, trends, weather, settings, history
+        case current, trends, weather, settings, history, fft
+    }
+}
+
+struct FFTData: Codable {
+    let sampleRate: Double
+    let bins: Int
+    let temperature: [Double]
+    let humidity: [Double]
+    let pressure: [Double]
+
+    enum CodingKeys: String, CodingKey {
+        case sampleRate = "sample_rate"
+        case bins, temperature, humidity, pressure
     }
 }
 

@@ -7,8 +7,8 @@ Wants=network-online.target
 Type=simple
 User=luka
 WorkingDirectory=/home/luka/bme688-monitor/railway
-Environment=RAILWAY_URL=https://DEIN-APP.up.railway.app
-Environment=BME688_API_KEY=DEIN_KEY_HIER
+Environment=RAILWAY_URL=https://bme688-monitor-production.up.railway.app
+Environment=BME688_API_KEY=124
 ExecStart=/usr/bin/python3 /home/luka/bme688-monitor/railway/sync.py
 Restart=on-failure
 RestartSec=10

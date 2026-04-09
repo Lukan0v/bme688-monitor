@@ -149,6 +149,8 @@ struct WeatherView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            .fixedSize()
+            .minimumScaleFactor(0.6)
 
             let dir = trendDirection(trend, threshold: trendThresh)
             HStack(spacing: 3) {

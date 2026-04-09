@@ -98,7 +98,7 @@ def get_pending_settings():
     """Pi polls this to check if the iOS app changed settings."""
     check_auth()
     pending = store.get("pending_settings")
-    if pending and store.get("pending_settings_time", 0) > store.get("settings_time", 0):
+    if pending:
         return jsonify({"pending": True, "settings": pending})
     return jsonify({"pending": False})
 

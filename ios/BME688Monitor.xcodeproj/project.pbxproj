@@ -18,6 +18,7 @@
 		E40000000000000000002009 /* SensorCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E40000000000000000001009 /* SensorCardView.swift */; };
 		E4000000000000000000200A /* WeatherIconView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4000000000000000000100A /* WeatherIconView.swift */; };
 		E4000000000000000000200B /* LiveChartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4000000000000000000100B /* LiveChartView.swift */; };
+		E4000000000000000000200D /* FFTSpectrumView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4000000000000000000100F /* FFTSpectrumView.swift */; };
 		E4000000000000000000200C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E4000000000000000000100C /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
@@ -36,6 +37,7 @@
 		E4000000000000000000100C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		E4000000000000000000100D /* BME688Monitor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BME688Monitor.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E4000000000000000000100E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		E4000000000000000000100F /* FFTSpectrumView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FFTSpectrumView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -71,6 +73,7 @@
 				E40000000000000000001009 /* SensorCardView.swift */,
 				E4000000000000000000100A /* WeatherIconView.swift */,
 				E4000000000000000000100B /* LiveChartView.swift */,
+				E4000000000000000000100F /* FFTSpectrumView.swift */,
 				E4000000000000000000100C /* Assets.xcassets */,
 				E4000000000000000000100E /* Info.plist */,
 			);
@@ -165,6 +168,7 @@
 				E40000000000000000002009 /* SensorCardView.swift in Sources */,
 				E4000000000000000000200A /* WeatherIconView.swift in Sources */,
 				E4000000000000000000200B /* LiveChartView.swift in Sources */,
+				E4000000000000000000200D /* FFTSpectrumView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -22,53 +22,85 @@ struct LiveChartView: View {
                 }
             }
 
-            Chart {
-                if showTemp {
-                    ForEach(Array(history.temperature.enumerated()), id: \.offset) { i, v in
-                        LineMark(
-                            x: .value("Zeit", i),
-                            y: .value("Temp", v),
-                            series: .value("Typ", "Temperatur")
-                        )
-                        .foregroundStyle(Color.orange)
-                        .lineStyle(StrokeStyle(lineWidth: 2))
+            // Temperature + Humidity chart (similar scale ~0-100)
+            if showTemp || showHum {
+                Chart {
+                    if showTemp {
+                        ForEach(Array(history.temperature.enumerated()), id: \.offset) { i, v in
+                            LineMark(
+                                x: .value("Zeit", i),
+                                y: .value("Temp", v),
+                                series: .value("Typ", "Temperatur")
+                            )
+                            .foregroundStyle(Color.orange)
+                            .lineStyle(StrokeStyle(lineWidth: 2))
+                        }
+                    }
+                    if showHum {
+                        ForEach(Array(history.humidity.enumerated()), id: \.offset) { i, v in
+                            LineMark(
+                                x: .value("Zeit", i),
+                                y: .value("Hum", v),
+                                series: .value("Typ", "Feuchte")
+                            )
+                            .foregroundStyle(Color.blue)
+                            .lineStyle(StrokeStyle(lineWidth: 2))
+                        }
                     }
                 }
-                if showHum {
-                    ForEach(Array(history.humidity.enumerated()), id: \.offset) { i, v in
-                        LineMark(
-                            x: .value("Zeit", i),
-                            y: .value("Hum", v),
-                            series: .value("Typ", "Feuchte")
-                        )
-                        .foregroundStyle(Color.blue)
-                        .lineStyle(StrokeStyle(lineWidth: 2))
+                .chartXAxis(.hidden)
+                .chartYAxis {
+                    AxisMarks(position: .leading) { _ in
+                        AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [4]))
+                            .foregroundStyle(Color.secondary.opacity(0.2))
+                        AxisValueLabel()
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
                     }
                 }
-                if showPres {
-                    ForEach(Array(history.pressure.enumerated()), id: \.offset) { i, v in
-                        LineMark(
-                            x: .value("Zeit", i),
-                            y: .value("Pres", v),
-                            series: .value("Typ", "Druck")
-                        )
-                        .foregroundStyle(Color.green)
-                        .lineStyle(StrokeStyle(lineWidth: 2))
-                    }
-                }
+                .chartLegend(.hidden)
+                .frame(height: showPres ? 140 : 200)
             }
-            .chartXAxis(.hidden)
-            .chartYAxis {
-                AxisMarks(position: .leading) { _ in
-                    AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [4]))
-                        .foregroundStyle(Color.secondary.opacity(0.2))
-                    AxisValueLabel()
+
+            // Pressure chart (separate, tight scale)
+            if showPres && !history.pressure.isEmpty {
+                let pMin = history.pressure.min() ?? 1013
+                let pMax = history.pressure.max() ?? 1013
+                let pRange = max(pMax - pMin, 0.5)
+                let margin = pRange * 0.3
+                let lo = pMin - margin
+                let hi = pMax + margin
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Druck (hPa)")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
+
+                    Chart {
+                        ForEach(Array(history.pressure.enumerated()), id: \.offset) { i, v in
+                            LineMark(
+                                x: .value("Zeit", i),
+                                y: .value("Pres", v)
+                            )
+                            .foregroundStyle(Color.green)
+                            .lineStyle(StrokeStyle(lineWidth: 2))
+                        }
+                    }
+                    .chartXAxis(.hidden)
+                    .chartYScale(domain: lo...hi)
+                    .chartYAxis {
+                        AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { _ in
+                            AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [4]))
+                                .foregroundStyle(Color.secondary.opacity(0.2))
+                            AxisValueLabel()
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .chartLegend(.hidden)
+                    .frame(height: (showTemp || showHum) ? 100 : 200)
                 }
             }
-            .chartLegend(.hidden)
-            .frame(height: 200)
 
             HStack {
                 Text("\u{2190} 60s")

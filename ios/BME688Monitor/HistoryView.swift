@@ -46,13 +46,27 @@ struct HistoryView: View {
                         }
                         .frame(height: 300)
                     } else {
-                        chartView
-                            .frame(height: 320)
-                            .padding(16)
-                            .background {
-                                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                    .fill(.ultraThinMaterial)
-                            }
+                        // Temperature + Humidity + eCO2 chart
+                        if showTemp || showHum || showCo2 {
+                            chartView
+                                .frame(height: showPres ? 240 : 320)
+                                .padding(16)
+                                .background {
+                                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                        .fill(.ultraThinMaterial)
+                                }
+                        }
+
+                        // Pressure chart (separate, tight scale)
+                        if showPres {
+                            pressureChartView
+                                .frame(height: (showTemp || showHum || showCo2) ? 180 : 320)
+                                .padding(16)
+                                .background {
+                                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                        .fill(.ultraThinMaterial)
+                                }
+                        }
                     }
 
                     // Stats
@@ -102,17 +116,6 @@ struct HistoryView: View {
                     .lineStyle(StrokeStyle(lineWidth: 1.5))
                 }
             }
-            if showPres {
-                ForEach(Array(sorted.enumerated()), id: \.offset) { i, p in
-                    LineMark(
-                        x: .value("Index", i),
-                        y: .value("Pres", p.pressure),
-                        series: .value("S", "P")
-                    )
-                    .foregroundStyle(.green)
-                    .lineStyle(StrokeStyle(lineWidth: 1.5))
-                }
-            }
             if showCo2 {
                 ForEach(Array(sorted.enumerated()), id: \.offset) { i, p in
                     LineMark(
@@ -147,6 +150,63 @@ struct HistoryView: View {
             }
         }
         .chartLegend(.hidden)
+    }
+
+    // MARK: - Pressure Chart
+
+    @ViewBuilder
+    private var pressureChartView: some View {
+        let sorted = api.historyData.sorted {
+            if $0.date != $1.date { return $0.date < $1.date }
+            return $0.minute < $1.minute
+        }
+        let pressVals = sorted.map(\.pressure)
+        let pMin = pressVals.min() ?? 1013
+        let pMax = pressVals.max() ?? 1013
+        let pRange = max(pMax - pMin, 0.5)
+        let margin = pRange * 0.3
+        let lo = pMin - margin
+        let hi = pMax + margin
+
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Druck (hPa)")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+
+            Chart {
+                ForEach(Array(sorted.enumerated()), id: \.offset) { i, p in
+                    LineMark(
+                        x: .value("Index", i),
+                        y: .value("Pres", p.pressure)
+                    )
+                    .foregroundStyle(.green)
+                    .lineStyle(StrokeStyle(lineWidth: 1.5))
+                }
+            }
+            .chartYScale(domain: lo...hi)
+            .chartXAxis {
+                AxisMarks(values: .automatic(desiredCount: 6)) { value in
+                    if let idx = value.as(Int.self), idx < sorted.count {
+                        AxisValueLabel {
+                            Text(days == 1 ? sorted[idx].time : "\(sorted[idx].date.suffix(5))")
+                                .font(.caption2)
+                        }
+                    }
+                    AxisGridLine(stroke: StrokeStyle(lineWidth: 0.3, dash: [4]))
+                        .foregroundStyle(.secondary.opacity(0.3))
+                }
+            }
+            .chartYAxis {
+                AxisMarks(position: .leading, values: .automatic(desiredCount: 5)) { _ in
+                    AxisGridLine(stroke: StrokeStyle(lineWidth: 0.3, dash: [4]))
+                        .foregroundStyle(.secondary.opacity(0.3))
+                    AxisValueLabel()
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .chartLegend(.hidden)
+        }
     }
 
     // MARK: - Stats
