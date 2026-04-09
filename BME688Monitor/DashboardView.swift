@@ -71,7 +71,7 @@ struct DashboardView: View {
                                      value: String(format: "%.0f", data.current.iaq),
                                      color: iaqColor(data.current.iaq))
                             miniInfo(icon: "flame.fill", label: "Gas",
-                                     value: String(format: "%.0f k\u{03A9}", data.current.gasResistance),
+                                     value: formatGasResistance(data.current.gasResistance),
                                      color: .purple)
                             miniInfo(icon: "clock", label: "Update",
                                      value: formatTime(data.timestamp),
@@ -175,6 +175,16 @@ struct DashboardView: View {
         if value <= 100 { return .yellow }
         if value <= 200 { return .orange }
         return .red
+    }
+
+    private func formatGasResistance(_ kOhm: Double) -> String {
+        if kOhm >= 1000 {
+            return String(format: "%.1f M\u{03A9}", kOhm / 1000)
+        } else if kOhm >= 1 {
+            return String(format: "%.0f k\u{03A9}", kOhm)
+        } else {
+            return String(format: "%.0f \u{03A9}", kOhm * 1000)
+        }
     }
 
     private func formatTime(_ timestamp: String) -> String {
