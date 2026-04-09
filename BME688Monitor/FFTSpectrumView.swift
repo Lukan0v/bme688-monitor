@@ -172,41 +172,33 @@ struct FFTSpectrumView: View {
                     )
                 }
 
-                // Build filled path + line path
+                // Build filled path (center → data points → center) and line path
                 var fillPath = Path()
                 var linePath = Path()
+                let center = CGPoint(x: cx, y: cy)
 
+                fillPath.move(to: center)
                 for i in 1..<count {
                     let angle = Double(i) / Double(count) * 2 * .pi - .pi / 2
                     let norm = CGFloat(max(0, (data[i] + 80) / 80))
                     let r = minR + norm * (maxR - minR)
                     let pt = CGPoint(x: cx + r * CGFloat(cos(angle)), y: cy + r * CGFloat(sin(angle)))
 
+                    fillPath.addLine(to: pt)
                     if i == 1 {
-                        fillPath.move(to: CGPoint(x: cx + minR * CGFloat(cos(angle)), y: cy + minR * CGFloat(sin(angle))))
-                        fillPath.addLine(to: pt)
                         linePath.move(to: pt)
                     } else {
-                        fillPath.addLine(to: pt)
                         linePath.addLine(to: pt)
                     }
                 }
-
-                // Close fill path back through center ring
-                let lastAngle = Double(count - 1) / Double(count) * 2 * .pi - .pi / 2
-                fillPath.addLine(to: CGPoint(x: cx + minR * CGFloat(cos(lastAngle)), y: cy + minR * CGFloat(sin(lastAngle))))
-                // Arc back along inner circle
-                for i in stride(from: count - 1, through: 1, by: -1) {
-                    let angle = Double(i) / Double(count) * 2 * .pi - .pi / 2
-                    fillPath.addLine(to: CGPoint(x: cx + minR * CGFloat(cos(angle)), y: cy + minR * CGFloat(sin(angle))))
-                }
-                fillPath.closeSubpath()
-
-                // Close line path
+                // Close: connect last point back to first data point, then to center
                 let firstAngle = 1.0 / Double(count) * 2 * .pi - .pi / 2
                 let firstNorm = CGFloat(max(0, (data[1] + 80) / 80))
                 let firstR = minR + firstNorm * (maxR - minR)
-                linePath.addLine(to: CGPoint(x: cx + firstR * CGFloat(cos(firstAngle)), y: cy + firstR * CGFloat(sin(firstAngle))))
+                let firstPt = CGPoint(x: cx + firstR * CGFloat(cos(firstAngle)), y: cy + firstR * CGFloat(sin(firstAngle)))
+                fillPath.addLine(to: firstPt)
+                fillPath.closeSubpath()
+                linePath.addLine(to: firstPt)
 
                 // Draw filled area with radial gradient
                 context.fill(fillPath, with: .radialGradient(
