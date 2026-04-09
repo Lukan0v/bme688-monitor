@@ -39,7 +39,7 @@ final class APIService {
         pollingTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 await self?.fetchLive()
-                try? await Task.sleep(for: .seconds(2))
+                try? await Task.sleep(for: .seconds(1))
             }
         }
     }

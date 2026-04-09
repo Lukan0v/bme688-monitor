@@ -2522,6 +2522,7 @@ int main(int argc, char* argv[]) {
             display_vals.pressure = prev_reading.pressure + (latest.pressure - prev_reading.pressure) * s;
             display_vals.eco2 = prev_reading.eco2 + (latest.eco2 - prev_reading.eco2) * s;
             display_vals.iaq = prev_reading.iaq + (latest.iaq - prev_reading.iaq) * s;
+            display_vals.gas_resistance = latest.gas_resistance;
             display_vals.valid = true;
         } else if (latest.valid) {
             display_vals = latest;
