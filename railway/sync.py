@@ -172,8 +172,8 @@ def main():
                     if cycle % 30 == 0:
                         print(f"  History push: {len(history)} Punkte")
 
-            # 4. Check for pending settings from iOS app (every 10s)
-            if cycle % 5 == 0:
+            # 4. Check for pending settings from iOS app (every 2s)
+            if cycle % 1 == 0:
                 pending = get_json(f"{url}/api/pending_settings", key)
                 if pending and pending.get("pending"):
                     new_settings = pending["settings"]

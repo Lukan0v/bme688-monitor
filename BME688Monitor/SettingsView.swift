@@ -224,10 +224,18 @@ struct SettingsView: View {
         saveMessage = nil
         let ok = await api.saveSettings(settings)
         isSaving = false
-        saveMessage = ok ? "Gespeichert!" : "Fehler beim Speichern"
         if ok {
+            saveMessage = "Gespeichert! Wird an Pi gesendet..."
+            // Reload to confirm round-trip
             try? await Task.sleep(for: .seconds(3))
+            if let s = await api.fetchSettings() {
+                settings = s
+                saveMessage = "Gespeichert und bestaetigt!"
+            }
+            try? await Task.sleep(for: .seconds(2))
             saveMessage = nil
+        } else {
+            saveMessage = "Fehler beim Speichern"
         }
     }
 }

@@ -22,84 +22,37 @@ struct LiveChartView: View {
                 }
             }
 
-            // Temperature + Humidity chart (similar scale ~0-100)
-            if showTemp || showHum {
-                Chart {
-                    if showTemp {
-                        ForEach(Array(history.temperature.enumerated()), id: \.offset) { i, v in
-                            LineMark(
-                                x: .value("Zeit", i),
-                                y: .value("Temp", v),
-                                series: .value("Typ", "Temperatur")
-                            )
-                            .foregroundStyle(Color.orange)
-                            .lineStyle(StrokeStyle(lineWidth: 2))
-                        }
-                    }
-                    if showHum {
-                        ForEach(Array(history.humidity.enumerated()), id: \.offset) { i, v in
-                            LineMark(
-                                x: .value("Zeit", i),
-                                y: .value("Hum", v),
-                                series: .value("Typ", "Feuchte")
-                            )
-                            .foregroundStyle(Color.blue)
-                            .lineStyle(StrokeStyle(lineWidth: 2))
-                        }
-                    }
-                }
-                .chartXAxis(.hidden)
-                .chartYAxis {
-                    AxisMarks(position: .leading) { _ in
-                        AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [4]))
-                            .foregroundStyle(Color.secondary.opacity(0.2))
-                        AxisValueLabel()
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .chartLegend(.hidden)
-                .frame(height: showPres ? 140 : 200)
+            let activeCount = (showTemp ? 1 : 0) + (showHum ? 1 : 0) + (showPres ? 1 : 0)
+            let chartH: CGFloat = activeCount <= 1 ? 160 : (activeCount == 2 ? 110 : 85)
+
+            // Temperature chart
+            if showTemp && !history.temperature.isEmpty {
+                tightChart(
+                    data: history.temperature,
+                    label: "Temperatur (\u{00B0}C)",
+                    color: .orange,
+                    height: chartH
+                )
             }
 
-            // Pressure chart (separate, tight scale)
+            // Humidity chart
+            if showHum && !history.humidity.isEmpty {
+                tightChart(
+                    data: history.humidity,
+                    label: "Feuchte (%)",
+                    color: .blue,
+                    height: chartH
+                )
+            }
+
+            // Pressure chart
             if showPres && !history.pressure.isEmpty {
-                let pMin = history.pressure.min() ?? 1013
-                let pMax = history.pressure.max() ?? 1013
-                let pRange = max(pMax - pMin, 0.5)
-                let margin = pRange * 0.3
-                let lo = pMin - margin
-                let hi = pMax + margin
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Druck (hPa)")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-
-                    Chart {
-                        ForEach(Array(history.pressure.enumerated()), id: \.offset) { i, v in
-                            LineMark(
-                                x: .value("Zeit", i),
-                                y: .value("Pres", v)
-                            )
-                            .foregroundStyle(Color.green)
-                            .lineStyle(StrokeStyle(lineWidth: 2))
-                        }
-                    }
-                    .chartXAxis(.hidden)
-                    .chartYScale(domain: lo...hi)
-                    .chartYAxis {
-                        AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { _ in
-                            AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [4]))
-                                .foregroundStyle(Color.secondary.opacity(0.2))
-                            AxisValueLabel()
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .chartLegend(.hidden)
-                    .frame(height: (showTemp || showHum) ? 100 : 200)
-                }
+                tightChart(
+                    data: history.pressure,
+                    label: "Druck (hPa)",
+                    color: .green,
+                    height: chartH
+                )
             }
 
             HStack {
@@ -116,6 +69,46 @@ struct LiveChartView: View {
         .background {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(.ultraThinMaterial)
+        }
+    }
+
+    @ViewBuilder
+    private func tightChart(data: [Double], label: String, color: Color, height: CGFloat) -> some View {
+        let dMin = data.min() ?? 0
+        let dMax = data.max() ?? 0
+        let range = max(dMax - dMin, 0.1)
+        let margin = range * 0.3
+        let lo = dMin - margin
+        let hi = dMax + margin
+
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+
+            Chart {
+                ForEach(Array(data.enumerated()), id: \.offset) { i, v in
+                    LineMark(
+                        x: .value("Zeit", i),
+                        y: .value("V", v)
+                    )
+                    .foregroundStyle(color)
+                    .lineStyle(StrokeStyle(lineWidth: 2))
+                }
+            }
+            .chartXAxis(.hidden)
+            .chartYScale(domain: lo...hi)
+            .chartYAxis {
+                AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { _ in
+                    AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [4]))
+                        .foregroundStyle(Color.secondary.opacity(0.2))
+                    AxisValueLabel()
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .chartLegend(.hidden)
+            .frame(height: height)
         }
     }
 }

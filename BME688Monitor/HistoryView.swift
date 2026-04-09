@@ -3,26 +3,35 @@ import Charts
 
 struct HistoryView: View {
     @Environment(APIService.self) var api
-    @State private var days = 1
+    @State private var selectedRange = "24h"
     @State private var showTemp = true
     @State private var showHum = true
     @State private var showPres = false
     @State private var showCo2 = false
 
-    private let dayOptions = [1, 3, 7]
+    private let rangeOptions = ["3h", "24h", "3d", "7d"]
+
+    private var days: Int {
+        switch selectedRange {
+        case "3h", "24h": return 1
+        case "3d": return 3
+        case "7d": return 7
+        default: return 1
+        }
+    }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
                     // Time range picker
-                    Picker("Zeitraum", selection: $days) {
-                        Text("24h").tag(1)
-                        Text("3 Tage").tag(3)
-                        Text("7 Tage").tag(7)
+                    Picker("Zeitraum", selection: $selectedRange) {
+                        ForEach(rangeOptions, id: \.self) { opt in
+                            Text(opt).tag(opt)
+                        }
                     }
                     .pickerStyle(.segmented)
-                    .onChange(of: days) {
+                    .onChange(of: selectedRange) {
                         Task { await api.fetchHistory(days: days) }
                     }
 
@@ -87,8 +96,24 @@ struct HistoryView: View {
     // MARK: - Chart
 
     @ViewBuilder
-    private var chartView: some View {
+    private var filteredData: [HistoryPoint] {
         let sorted = api.historyData.sorted {
+            if $0.date != $1.date { return $0.date < $1.date }
+            return $0.minute < $1.minute
+        }
+        if selectedRange == "3h" {
+            // Keep only the last 3 hours (180 minutes worth of points)
+            // Each point is ~1min, so last 180 points
+            let count = sorted.count
+            if count > 180 {
+                return Array(sorted.suffix(180))
+            }
+        }
+        return sorted
+    }
+
+    private var chartView: some View {
+        let sorted = filteredData.sorted {
             if $0.date != $1.date { return $0.date < $1.date }
             return $0.minute < $1.minute
         }
@@ -156,10 +181,7 @@ struct HistoryView: View {
 
     @ViewBuilder
     private var pressureChartView: some View {
-        let sorted = api.historyData.sorted {
-            if $0.date != $1.date { return $0.date < $1.date }
-            return $0.minute < $1.minute
-        }
+        let sorted = filteredData
         let pressVals = sorted.map(\.pressure)
         let pMin = pressVals.min() ?? 1013
         let pMax = pressVals.max() ?? 1013
