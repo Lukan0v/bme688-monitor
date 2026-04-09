@@ -95,7 +95,6 @@ struct HistoryView: View {
 
     // MARK: - Chart
 
-    @ViewBuilder
     private var filteredData: [HistoryPoint] {
         let sorted = api.historyData.sorted {
             if $0.date != $1.date { return $0.date < $1.date }
@@ -112,46 +111,55 @@ struct HistoryView: View {
         return sorted
     }
 
-    private var chartView: some View {
-        let sorted = filteredData.sorted {
+    private var sortedData: [HistoryPoint] {
+        filteredData.sorted {
             if $0.date != $1.date { return $0.date < $1.date }
             return $0.minute < $1.minute
         }
+    }
 
-        Chart {
-            if showTemp {
-                ForEach(Array(sorted.enumerated()), id: \.offset) { i, p in
-                    LineMark(
-                        x: .value("Index", i),
-                        y: .value("Temp", p.temperature),
-                        series: .value("S", "T")
-                    )
-                    .foregroundStyle(.orange)
-                    .lineStyle(StrokeStyle(lineWidth: 1.5))
-                }
-            }
-            if showHum {
-                ForEach(Array(sorted.enumerated()), id: \.offset) { i, p in
-                    LineMark(
-                        x: .value("Index", i),
-                        y: .value("Hum", p.humidity),
-                        series: .value("S", "H")
-                    )
-                    .foregroundStyle(.blue)
-                    .lineStyle(StrokeStyle(lineWidth: 1.5))
-                }
-            }
-            if showCo2 {
-                ForEach(Array(sorted.enumerated()), id: \.offset) { i, p in
-                    LineMark(
-                        x: .value("Index", i),
-                        y: .value("CO2", p.eco2),
-                        series: .value("S", "C")
-                    )
-                    .foregroundStyle(.yellow)
-                    .lineStyle(StrokeStyle(lineWidth: 1.5))
-                }
-            }
+    private func tempMarks(_ data: [HistoryPoint]) -> some ChartContent {
+        ForEach(Array(data.enumerated()), id: \.offset) { i, p in
+            LineMark(
+                x: .value("Index", i),
+                y: .value("Temp", p.temperature),
+                series: .value("S", "T")
+            )
+            .foregroundStyle(.orange)
+            .lineStyle(StrokeStyle(lineWidth: 1.5))
+        }
+    }
+
+    private func humMarks(_ data: [HistoryPoint]) -> some ChartContent {
+        ForEach(Array(data.enumerated()), id: \.offset) { i, p in
+            LineMark(
+                x: .value("Index", i),
+                y: .value("Hum", p.humidity),
+                series: .value("S", "H")
+            )
+            .foregroundStyle(.blue)
+            .lineStyle(StrokeStyle(lineWidth: 1.5))
+        }
+    }
+
+    private func co2Marks(_ data: [HistoryPoint]) -> some ChartContent {
+        ForEach(Array(data.enumerated()), id: \.offset) { i, p in
+            LineMark(
+                x: .value("Index", i),
+                y: .value("CO2", p.eco2),
+                series: .value("S", "C")
+            )
+            .foregroundStyle(.yellow)
+            .lineStyle(StrokeStyle(lineWidth: 1.5))
+        }
+    }
+
+    private var chartView: some View {
+        let sorted = sortedData
+        return Chart {
+            if showTemp { tempMarks(sorted) }
+            if showHum { humMarks(sorted) }
+            if showCo2 { co2Marks(sorted) }
         }
         .chartXAxis {
             AxisMarks(values: .automatic(desiredCount: 6)) { value in
@@ -179,9 +187,8 @@ struct HistoryView: View {
 
     // MARK: - Pressure Chart
 
-    @ViewBuilder
     private var pressureChartView: some View {
-        let sorted = filteredData
+        let sorted = sortedData
         let pressVals = sorted.map(\.pressure)
         let pMin = pressVals.min() ?? 1013
         let pMax = pressVals.max() ?? 1013
@@ -190,7 +197,7 @@ struct HistoryView: View {
         let lo = pMin - margin
         let hi = pMax + margin
 
-        VStack(alignment: .leading, spacing: 4) {
+        return VStack(alignment: .leading, spacing: 4) {
             Text("Druck (hPa)")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
@@ -234,10 +241,10 @@ struct HistoryView: View {
     // MARK: - Stats
 
     private var statsGrid: some View {
-        let data = api.historyData
-        let temps = data.map(\.temperature)
-        let hums = data.map(\.humidity)
-        let press = data.map(\.pressure)
+        let data: [HistoryPoint] = api.historyData
+        let temps: [Double] = data.map(\.temperature)
+        let hums: [Double] = data.map(\.humidity)
+        let press: [Double] = data.map(\.pressure)
 
         return LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
             statCard(label: "Temp Min", value: String(format: "%.1f\u{00B0}C", temps.min() ?? 0), color: .blue)
