@@ -19,8 +19,17 @@ final class APIService {
 
     private var pollingTask: Task<Void, Never>?
 
+    static let defaultURL = "https://bme688-monitor-production.up.railway.app"
+
     init() {
-        serverURL = UserDefaults.standard.string(forKey: "serverURL") ?? "https://bme688-monitor-production.up.railway.app"
+        let saved = UserDefaults.standard.string(forKey: "serverURL")
+        // Migrate: replace old default that no longer works
+        if saved == nil || saved == "http://raspberrypi.local:8080" {
+            serverURL = Self.defaultURL
+            UserDefaults.standard.set(serverURL, forKey: "serverURL")
+        } else {
+            serverURL = saved!
+        }
     }
 
     // MARK: - Polling
