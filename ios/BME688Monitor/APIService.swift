@@ -20,7 +20,7 @@ final class APIService {
     private var pollingTask: Task<Void, Never>?
 
     init() {
-        serverURL = UserDefaults.standard.string(forKey: "serverURL") ?? "http://raspberrypi.local:8080"
+        serverURL = UserDefaults.standard.string(forKey: "serverURL") ?? "https://bme688-monitor-production.up.railway.app"
     }
 
     // MARK: - Polling

@@ -88,7 +88,7 @@ struct DashboardView: View {
                 .padding(.bottom, 20)
             }
             .background(Color(.systemGroupedBackground))
-            .navigationTitle("Dashboard")
+            .navigationTitle("Home Monitor")
             .refreshable {
                 await api.fetchLive()
             }
