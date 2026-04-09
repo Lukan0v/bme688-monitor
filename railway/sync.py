@@ -25,6 +25,7 @@ WEB_DATA = os.path.join(BASE_DIR, "web_data.json")
 SETTINGS_CONF = os.path.join(BASE_DIR, "settings.conf")
 SETTINGS_RELOAD = os.path.join(BASE_DIR, "settings_reload")
 DATA_DIR = os.path.join(BASE_DIR, "data")
+SYNC_STATUS = os.path.join(BASE_DIR, "sync_status")
 
 
 def post_json(url, data, api_key):
@@ -141,7 +142,13 @@ def main():
             # 1. Push live data (every 2s)
             live = read_web_data()
             if live:
-                post_json(f"{url}/api/push/live", live, key)
+                result = post_json(f"{url}/api/push/live", live, key)
+                # Write sync status for the desktop app
+                try:
+                    with open(SYNC_STATUS, "w") as sf:
+                        sf.write(f"{int(time.time())} {'ok' if result else 'err'}\n")
+                except OSError:
+                    pass
                 if cycle % 30 == 0:  # Log every 60s
                     ts = live.get("timestamp", "?")
                     print(f"  [{ts}] Live push OK — "

@@ -119,6 +119,7 @@ struct LogPoint {
 
 static const char* WEB_DATA_PATH = "/home/luka/bme688-monitor/web_data.json";
 static const char* SETTINGS_RELOAD_PATH = "/home/luka/bme688-monitor/settings_reload";
+static const char* SYNC_STATUS_PATH = "/home/luka/bme688-monitor/sync_status";
 
 static void save_log_point(float temp, float hum, float pres, float eco2) {
     time_t t = time(nullptr);
@@ -3109,6 +3110,42 @@ int main(int argc, char* argv[]) {
             // Clock right-aligned inside title bar (title bar ends at win_w-370+8=win_w-362)
             // "HH:MM:SS" ~56px wide at 14px font, place so it ends ~10px before title bar right edge
             draw_text(renderer, font_small, ts, win_w - 516, 22, TEXT_DIM);
+        }
+
+        // Cloud sync status indicator
+        {
+            static uint32_t last_sync_check = 0;
+            static bool sync_online = false;
+            static int sync_age_s = 999;
+            // Check sync_status file every 2s
+            if (now - last_sync_check >= 2000) {
+                last_sync_check = now;
+                FILE* sf = fopen(SYNC_STATUS_PATH, "r");
+                if (sf) {
+                    long ts = 0;
+                    char st[8] = {};
+                    if (fscanf(sf, "%ld %7s", &ts, st) >= 1) {
+                        sync_age_s = (int)(time(nullptr) - ts);
+                        sync_online = (sync_age_s < 10 && strcmp(st, "ok") == 0);
+                    }
+                    fclose(sf);
+                } else {
+                    sync_online = false;
+                    sync_age_s = 999;
+                }
+            }
+            // Draw cloud icon + status
+            Color sync_col = sync_online ? Color{80, 220, 120, 255} : Color{180, 60, 60, 200};
+            const char* sync_lbl = sync_online ? "Online" : "Offline";
+            // Small dot
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+            set_color(renderer, sync_col);
+            for (int dy = -3; dy <= 3; dy++) {
+                int dx = (int)sqrt(9 - dy * dy);
+                SDL_RenderDrawLine(renderer, win_w - 460, 28 + dy, win_w - 460 + dx * 2, 28 + dy);
+            }
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+            draw_text(renderer, font_small, sync_lbl, win_w - 448, 22, sync_col);
         }
 
         // Power save button - shows target mode immediately
