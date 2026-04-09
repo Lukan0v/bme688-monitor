@@ -5,12 +5,14 @@ enum SpectrumColorScheme: Int, CaseIterable {
     case klassik = 0
     case thermal = 1
     case neon = 2
+    case aurora = 3
 
     var label: String {
         switch self {
         case .klassik: return "Klassik"
         case .thermal: return "Thermal"
         case .neon: return "Neon"
+        case .aurora: return "Aurora"
         }
     }
 }
@@ -20,7 +22,8 @@ struct FFTSpectrumView: View {
     @State private var selectedChannel = 0
     @State private var colorScheme: SpectrumColorScheme = .klassik
     @State private var cursorFreq: Double? = nil
-    @State private var cursorOpacity: Double = 0
+    @State private var cursorVisible = false
+    @State private var fadeTask: Task<Void, Never>? = nil
 
     private let channels = ["Temperatur", "Feuchte", "Druck"]
 
@@ -91,6 +94,7 @@ struct FFTSpectrumView: View {
         case .klassik: return .orange
         case .thermal: return .red
         case .neon: return .cyan
+        case .aurora: return .green
         }
     }
 
@@ -128,8 +132,10 @@ struct FFTSpectrumView: View {
         let lineWidth: CGFloat = colorScheme == .klassik ? 1.5 : 1.2
         let curLineColor: Color = lineColor
         let curAreaGradient: LinearGradient = areaStyle(stops: gradientStops(for: colorScheme))
-        let showCursor = cursorFreq != nil && cursorOpacity > 0
+        let showCursor = cursorFreq != nil && cursorVisible
         let safeCursorFreq = cursorFreq ?? 0
+        let peaks = findTop3Peaks(data)
+        let peakColor: Color = peakMarkerColor
 
         Chart {
             ForEach(1..<data.count, id: \.self) { i in
@@ -148,10 +154,33 @@ struct FFTSpectrumView: View {
                 .lineStyle(StrokeStyle(lineWidth: lineWidth))
             }
 
+            // 3 peak markers
+            ForEach(peaks, id: \.bin) { peak in
+                PointMark(
+                    x: .value("Freq", Double(peak.bin) * freqRes),
+                    y: .value("dB", peak.dB)
+                )
+                .symbol(.diamond)
+                .symbolSize(peak.rank == 0 ? 60 : 36)
+                .foregroundStyle(peakColor)
+            }
+
+            // Cursor
             if showCursor {
+                let cursorBin = max(1, min(Int(round(safeCursorFreq / freqRes)), data.count - 1))
+                let cursorDb = data[cursorBin]
+
                 RuleMark(x: .value("Cursor", safeCursorFreq))
-                    .foregroundStyle(Color.white.opacity(0.6 * cursorOpacity))
+                    .foregroundStyle(Color.white.opacity(0.6))
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 3]))
+
+                PointMark(
+                    x: .value("Freq", safeCursorFreq),
+                    y: .value("dB", cursorDb)
+                )
+                .symbol(.circle)
+                .symbolSize(50)
+                .foregroundStyle(Color.white)
             }
         }
         .chartYScale(domain: -80...0)
@@ -180,15 +209,28 @@ struct FFTSpectrumView: View {
             }
         }
         .chartLegend(.hidden)
+        .opacity(cursorVisible ? 1.0 : 1.0) // keep chart always visible
         .overlay(alignment: .topLeading) {
             if showCursor {
                 cursorOverlay(data: data, freqRes: freqRes)
             }
         }
         .chartOverlay { proxy in
-            chartGestureOverlay(proxy: proxy, data: data, freqRes: freqRes)
+            chartGestureOverlay(proxy: proxy)
+        }
+        .animation(.easeInOut(duration: 0.15), value: cursorVisible)
+    }
+
+    private var peakMarkerColor: Color {
+        switch colorScheme {
+        case .klassik: return .white
+        case .thermal: return .yellow
+        case .neon: return .mint
+        case .aurora: return .white
         }
     }
+
+    // MARK: - Cursor overlay
 
     @ViewBuilder
     private func cursorOverlay(data: [Double], freqRes: Double) -> some View {
@@ -217,11 +259,13 @@ struct FFTSpectrumView: View {
                 .fill(.ultraThinMaterial)
                 .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
         }
-        .opacity(cursorOpacity)
+        .transition(.opacity.animation(.easeOut(duration: 0.25)))
         .padding(8)
     }
 
-    private func chartGestureOverlay(proxy: ChartProxy, data: [Double], freqRes: Double) -> some View {
+    // MARK: - Gesture overlay
+
+    private func chartGestureOverlay(proxy: ChartProxy) -> some View {
         GeometryReader { geo in
             Rectangle()
                 .fill(Color.clear)
@@ -234,14 +278,21 @@ struct FFTSpectrumView: View {
                             let x = value.location.x - origin.x
                             if let freq: Double = proxy.value(atX: x) {
                                 cursorFreq = freq
-                                withAnimation(.easeIn(duration: 0.1)) {
-                                    cursorOpacity = 1.0
-                                }
+                                cursorVisible = true
+                                // Cancel pending fade
+                                fadeTask?.cancel()
+                                fadeTask = nil
                             }
                         }
                         .onEnded { _ in
-                            withAnimation(.easeOut(duration: 3.0)) {
-                                cursorOpacity = 0
+                            // Wait 1.5s, then quick fade
+                            fadeTask?.cancel()
+                            fadeTask = Task { @MainActor in
+                                try? await Task.sleep(for: .seconds(1.5))
+                                guard !Task.isCancelled else { return }
+                                withAnimation(.easeOut(duration: 0.4)) {
+                                    cursorVisible = false
+                                }
                             }
                         }
                 )
@@ -252,6 +303,7 @@ struct FFTSpectrumView: View {
         switch colorScheme {
         case .klassik: return .orange
         case .thermal, .neon: return .white.opacity(0.55)
+        case .aurora: return .white.opacity(0.5)
         }
     }
 
@@ -259,7 +311,7 @@ struct FFTSpectrumView: View {
         switch colorScheme {
         case .klassik:
             return LinearGradient(
-                colors: [Color.orange.opacity(0.4), Color.orange.opacity(0.02)],
+                colors: [Color.orange.opacity(0.25), Color.orange.opacity(0.02)],
                 startPoint: .top, endPoint: .bottom
             )
         default:
@@ -273,23 +325,32 @@ struct FFTSpectrumView: View {
         switch scheme {
         case .thermal:
             return [
-                .init(color: Color(red: 0, green: 0, blue: 0).opacity(0.8), location: 0.0),
-                .init(color: Color(red: 0, green: 0, blue: 0.7).opacity(0.85), location: 0.25),
-                .init(color: Color(red: 0.86, green: 0, blue: 0).opacity(0.85), location: 0.5),
-                .init(color: Color(red: 0.86, green: 0.78, blue: 0).opacity(0.9), location: 0.75),
-                .init(color: Color(red: 1, green: 1, blue: 0.7).opacity(0.95), location: 1.0),
+                .init(color: Color(red: 0, green: 0, blue: 0).opacity(0.05), location: 0.0),
+                .init(color: Color(red: 0, green: 0, blue: 0.7).opacity(0.5), location: 0.25),
+                .init(color: Color(red: 0.86, green: 0, blue: 0).opacity(0.55), location: 0.5),
+                .init(color: Color(red: 0.86, green: 0.78, blue: 0).opacity(0.6), location: 0.75),
+                .init(color: Color(red: 1, green: 1, blue: 0.7).opacity(0.7), location: 1.0),
             ]
         case .neon:
             return [
-                .init(color: Color(red: 0, green: 0, blue: 0).opacity(0.8), location: 0.0),
-                .init(color: Color(red: 0.31, green: 0, blue: 0.63).opacity(0.8), location: 0.33),
-                .init(color: Color(red: 0, green: 0.86, blue: 0.78).opacity(0.85), location: 0.66),
-                .init(color: Color(red: 1, green: 1, blue: 0.9).opacity(0.95), location: 1.0),
+                .init(color: Color(red: 0, green: 0, blue: 0).opacity(0.05), location: 0.0),
+                .init(color: Color(red: 0.31, green: 0, blue: 0.63).opacity(0.5), location: 0.33),
+                .init(color: Color(red: 0, green: 0.86, blue: 0.78).opacity(0.55), location: 0.66),
+                .init(color: Color(red: 1, green: 1, blue: 0.9).opacity(0.7), location: 1.0),
+            ]
+        case .aurora:
+            return [
+                .init(color: Color(red: 0, green: 0.05, blue: 0.1).opacity(0.05), location: 0.0),
+                .init(color: Color(red: 0, green: 0.5, blue: 0.3).opacity(0.45), location: 0.25),
+                .init(color: Color(red: 0, green: 0.8, blue: 0.6).opacity(0.5), location: 0.45),
+                .init(color: Color(red: 0.1, green: 0.6, blue: 0.9).opacity(0.55), location: 0.65),
+                .init(color: Color(red: 0.4, green: 0.3, blue: 0.9).opacity(0.6), location: 0.85),
+                .init(color: Color(red: 0.7, green: 0.4, blue: 1.0).opacity(0.7), location: 1.0),
             ]
         default:
             return [
                 .init(color: .orange.opacity(0.02), location: 0),
-                .init(color: .orange.opacity(0.4), location: 1),
+                .init(color: .orange.opacity(0.25), location: 1),
             ]
         }
     }
@@ -304,7 +365,6 @@ struct FFTSpectrumView: View {
     private func interpolatedPeak(_ data: [Double]) -> PeakResult {
         guard data.count > 2 else { return PeakResult(bin: 0, dB: -80) }
 
-        // Find raw peak (skip DC bin 0)
         var maxIdx = 1
         var maxVal = data[1]
         for i in 2..<data.count {
@@ -314,7 +374,6 @@ struct FFTSpectrumView: View {
             }
         }
 
-        // 3-point parabolic interpolation
         if maxIdx > 0 && maxIdx < data.count - 1 {
             let alpha = data[maxIdx - 1]
             let beta = data[maxIdx]
@@ -328,6 +387,38 @@ struct FFTSpectrumView: View {
             }
         }
         return PeakResult(bin: Double(maxIdx), dB: maxVal)
+    }
+
+    // MARK: - Top 3 Peaks
+
+    private struct PeakMarker: Hashable {
+        let bin: Int
+        let dB: Double
+        let rank: Int
+
+        func hash(into hasher: inout Hasher) {
+            hasher.combine(bin)
+        }
+    }
+
+    private func findTop3Peaks(_ data: [Double]) -> [PeakMarker] {
+        guard data.count > 3 else { return [] }
+
+        // Find local maxima (bin where data[i] > data[i-1] and data[i] > data[i+1])
+        var localMaxima: [(bin: Int, dB: Double)] = []
+        for i in 1..<(data.count - 1) {
+            if data[i] > data[i - 1] && data[i] > data[i + 1] && data[i] > -75 {
+                localMaxima.append((bin: i, dB: data[i]))
+            }
+        }
+
+        // Sort by amplitude descending, take top 3
+        localMaxima.sort { $0.dB > $1.dB }
+        let top = localMaxima.prefix(3)
+
+        return top.enumerated().map { idx, peak in
+            PeakMarker(bin: peak.bin, dB: peak.dB, rank: idx)
+        }
     }
 
     // MARK: - Period formatting
@@ -383,4 +474,3 @@ struct FFTSpectrumView: View {
         .frame(height: 300)
     }
 }
-
