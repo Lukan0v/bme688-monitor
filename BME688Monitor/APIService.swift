@@ -69,8 +69,15 @@ final class APIService {
                 return
             }
             liveData = try JSONDecoder().decode(LiveData.self, from: data)
-            isConnected = true
-            lastError = nil
+            // Check if Pi data is stale (relay adds _relay_age_s)
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let age = json["_relay_age_s"] as? Double, age > 15 {
+                isConnected = false
+                lastError = "Pi offline (Daten \(Int(age))s alt)"
+            } else {
+                isConnected = true
+                lastError = nil
+            }
         } catch is CancellationError {
             // Task cancelled, ignore
         } catch {
