@@ -5,18 +5,22 @@ struct ContentView: View {
 
     var body: some View {
         TabView {
-            Tab("Dashboard", systemImage: "gauge.with.dots.needle.33percent") {
-                DashboardView()
-            }
-            Tab("Wetter", systemImage: "cloud.sun.fill") {
-                WeatherView()
-            }
-            Tab("Verlauf", systemImage: "chart.xyaxis.line") {
-                HistoryView()
-            }
-            Tab("Einstellungen", systemImage: "gearshape.fill") {
-                SettingsView()
-            }
+            DashboardView()
+                .tabItem {
+                    Label("Dashboard", systemImage: "gauge.with.dots.needle.33percent")
+                }
+            WeatherView()
+                .tabItem {
+                    Label("Wetter", systemImage: "cloud.sun.fill")
+                }
+            HistoryView()
+                .tabItem {
+                    Label("Verlauf", systemImage: "chart.xyaxis.line")
+                }
+            SettingsView()
+                .tabItem {
+                    Label("Einstellungen", systemImage: "gearshape.fill")
+                }
         }
         .tint(.blue)
     }
