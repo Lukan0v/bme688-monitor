@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BME688 Monitor</title>
+<style>
+:root {
+  --bg: #121218;
+  --panel: #1e1e2a;
+  --card: #28283a;
+  --text: #e6e6f0;
+  --dim: #8c8ca0;
+  --temp: #ff6450;
+  --hum: #50b4ff;
+  --pres: #78dc8c;
+  --co2: #ffc83c;
+  --red: #b43232;
+  --green: #289628;
+  --border: #32324a;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+.container { max-width: 1200px; margin: 0 auto; padding: 12px; }
+
+/* Header */
+header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 20px; background: var(--panel); border-radius: 12px;
+  margin-bottom: 12px; flex-wrap: wrap; gap: 8px;
+}
+header h1 { font-size: 1.3em; font-weight: 600; white-space: nowrap; }
+.header-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.status-badge {
+  padding: 4px 12px; border-radius: 16px; font-size: 0.8em; font-weight: 600;
+  white-space: nowrap; transition: background 0.3s, color 0.3s;
+}
+.status-live { background: #1a4a2a; color: #4ade80; }
+.status-demo { background: #4a3a1a; color: #fbbf24; }
+.status-offline { background: #4a1a1a; color: #f87171; }
+
+/* Navigation tabs */
+.tabs {
+  display: flex; gap: 4px; margin-bottom: 12px; background: var(--panel);
+  border-radius: 10px; padding: 4px; overflow-x: auto;
+}
+.tab {
+  flex: 1; padding: 10px 8px; text-align: center; border-radius: 8px;
+  cursor: pointer; font-weight: 500; font-size: 0.9em;
+  transition: background 0.2s, color 0.2s; color: var(--dim);
+  white-space: nowrap; user-select: none;
+}
+.tab:hover { background: var(--card); color: var(--text); }
+.tab.active { background: var(--card); color: var(--text); box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+
+/* Cards grid */
+.cards {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 12px; margin-bottom: 12px;
+}
+.card {
+  background: var(--card); border-radius: 12px; padding: 16px;
+  border: 1px solid var(--border); transition: border-color 0.2s;
+}
+.card:hover { border-color: #484868; }
+.card-label {
+  font-size: 0.75em; color: var(--dim); text-transform: uppercase;
+  letter-spacing: 1px; margin-bottom: 6px;
+}
+.card-value {
+  font-size: 2.2em; font-weight: 700; line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  transition: color 0.3s;
+}
+.card-unit { font-size: 0.4em; color: var(--dim); font-weight: 400; }
+.card-trend {
+  font-size: 0.85em; margin-top: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.trend-up { color: var(--temp); }
+.trend-down { color: var(--hum); }
+.trend-stable { color: var(--pres); }
+
+/* Weather section */
+.weather-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+.weather-card {
+  background: var(--card); border-radius: 12px; padding: 24px 20px;
+  text-align: center; border: 1px solid var(--border);
+  display: flex; flex-direction: column; align-items: center;
+}
+.weather-card h3 {
+  font-size: 0.8em; color: var(--dim); text-transform: uppercase;
+  letter-spacing: 2px; margin-bottom: 16px;
+}
+.weather-icon-wrap {
+  width: 80px; height: 80px; display: flex; align-items: center; justify-content: center;
+  margin-bottom: 12px;
+}
+.weather-icon-wrap canvas { width: 80px; height: 80px; }
+.weather-text { font-size: 1.3em; font-weight: 600; margin-bottom: 6px; }
+.weather-detail { font-size: 0.85em; color: var(--dim); line-height: 1.4; }
+
+/* Weather info cards */
+.weather-info {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 12px;
+}
+.weather-info .card { text-align: center; }
+.weather-info .card-value { font-size: 1.5em; }
+
+/* Chart */
+.chart-container {
+  background: var(--card); border-radius: 12px; padding: 16px;
+  border: 1px solid var(--border); margin-bottom: 12px;
+  position: relative;
+}
+.chart-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 12px; flex-wrap: wrap; gap: 8px;
+}
+.chart-header h3 { font-size: 0.9em; color: var(--dim); }
+.chart-controls { display: flex; gap: 6px; flex-wrap: wrap; }
+.chart-btn {
+  padding: 5px 12px; border-radius: 6px; border: 1px solid var(--border);
+  background: transparent; cursor: pointer; font-size: 0.8em;
+  transition: all 0.2s; color: var(--dim);
+}
+.chart-btn:hover { border-color: #585878; }
+.chart-btn.active { background: var(--panel); border-color: #585878; }
+/* Preserve inline color on active buttons */
+.chart-btn.active[style] { opacity: 1; }
+.chart-btn:not(.active)[style] { opacity: 0.4; }
+.chart-btn:not([style]).active { color: var(--text); }
+canvas { display: block; width: 100%; }
+.chart-empty {
+  display: flex; align-items: center; justify-content: center;
+  height: 200px; color: var(--dim); font-size: 0.9em;
+}
+
+/* Settings */
+.settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
+.settings-card { background: var(--card); border-radius: 12px; padding: 16px; border: 1px solid var(--border); }
+.settings-card h3 { font-size: 0.95em; margin-bottom: 12px; color: var(--text); }
+.setting-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 14px; background: var(--panel); border-radius: 8px;
+  border: 1px solid transparent; transition: border-color 0.2s;
+}
+.setting-row + .setting-row { margin-top: 8px; }
+.setting-row:hover { border-color: var(--border); }
+.setting-left { flex: 1; min-width: 0; margin-right: 12px; }
+.setting-label { font-size: 0.9em; }
+.setting-desc { font-size: 0.75em; color: var(--dim); margin-top: 2px; }
+.setting-input {
+  background: var(--card); border: 1px solid var(--border); color: var(--text);
+  padding: 6px 10px; border-radius: 6px; width: 90px; text-align: right;
+  font-size: 0.9em; flex-shrink: 0; transition: border-color 0.2s;
+  font-variant-numeric: tabular-nums;
+}
+.setting-input:focus { outline: none; border-color: var(--hum); }
+.toggle {
+  display: inline-block; position: relative; width: 48px; height: 26px;
+  border-radius: 13px; background: var(--border); cursor: pointer;
+  transition: background 0.2s; flex-shrink: 0;
+}
+.toggle.on { background: var(--green); }
+.toggle::after {
+  content: ''; position: absolute; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--text); top: 2px; left: 2px; transition: transform 0.2s;
+}
+.toggle.on::after { transform: translateX(22px); }
+.btn-save {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 24px; background: var(--green); color: white; border: none;
+  border-radius: 8px; cursor: pointer; font-size: 0.95em; font-weight: 600;
+  margin-top: 16px; transition: background 0.2s;
+}
+.btn-save:hover { background: #32b832; }
+.btn-save:active { transform: scale(0.98); }
+.save-status {
+  display: inline-block; margin-left: 12px; font-size: 0.85em;
+  transition: opacity 0.3s; vertical-align: middle;
+}
+
+/* Section visibility */
+.section { display: none; }
+.section.active { display: block; }
+
+/* Responsive */
+@media (max-width: 900px) {
+  .cards { grid-template-columns: repeat(2, 1fr); }
+  .weather-info { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 500px) {
+  .container { padding: 8px; }
+  header { padding: 10px 14px; }
+  header h1 { font-size: 1.1em; }
+  .cards { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .card { padding: 12px; }
+  .card-value { font-size: 1.6em; }
+  .weather-grid { grid-template-columns: 1fr; }
+  .weather-info { grid-template-columns: 1fr 1fr; }
+  .settings-grid { grid-template-columns: 1fr; }
+  .tab { padding: 8px 4px; font-size: 0.8em; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>BME688 Monitor</h1>
+    <div class="header-right">
+      <span id="timestamp" style="font-size:0.8em; color:var(--dim)"></span>
+      <span id="status-badge" class="status-badge status-offline">Offline</span>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="dashboard">Dashboard</div>
+    <div class="tab" data-tab="weather">Wetter</div>
+    <div class="tab" data-tab="history">Verlauf</div>
+    <div class="tab" data-tab="settings">Einstellungen</div>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="tab-dashboard" class="section active">
+    <div class="cards">
+      <div class="card">
+        <div class="card-label">Temperatur</div>
+        <div class="card-value" style="color:var(--temp)"><span id="v-temp">--</span><span class="card-unit"> °C</span></div>
+        <div class="card-trend" id="t-temp"></div>
+      </div>
+      <div class="card">
+        <div class="card-label">Luftfeuchtigkeit</div>
+        <div class="card-value" style="color:var(--hum)"><span id="v-hum">--</span><span class="card-unit"> %</span></div>
+        <div class="card-trend" id="t-hum"></div>
+      </div>
+      <div class="card">
+        <div class="card-label">Luftdruck</div>
+        <div class="card-value" style="color:var(--pres)"><span id="v-pres">--</span><span class="card-unit"> hPa</span></div>
+        <div class="card-trend" id="t-pres"></div>
+      </div>
+      <div class="card">
+        <div class="card-label">Luftqualität</div>
+        <div class="card-value" style="color:var(--co2)"><span id="v-co2">--</span><span class="card-unit"> ppm</span></div>
+        <div class="card-trend" id="t-iaq"></div>
+      </div>
+    </div>
+
+    <div class="chart-container">
+      <div class="chart-header">
+        <h3>Live-Trend (letzte 60s)</h3>
+        <div class="chart-controls">
+          <button class="chart-btn active" data-series="temperature" style="color:var(--temp)">Temp</button>
+          <button class="chart-btn active" data-series="humidity" style="color:var(--hum)">Feuchte</button>
+          <button class="chart-btn active" data-series="pressure" style="color:var(--pres)">Druck</button>
+        </div>
+      </div>
+      <canvas id="live-chart"></canvas>
+    </div>
+  </div>
+
+  <!-- Weather -->
+  <div id="tab-weather" class="section">
+    <div class="weather-grid">
+      <div class="weather-card">
+        <h3>Jetzt</h3>
+        <div class="weather-icon-wrap"><canvas id="wx-now-canvas" width="160" height="160"></canvas></div>
+        <div class="weather-text" id="wx-now-text">--</div>
+        <div class="weather-detail" id="wx-now-detail"></div>
+      </div>
+      <div class="weather-card">
+        <h3>Prognose</h3>
+        <div class="weather-icon-wrap"><canvas id="wx-prog-canvas" width="160" height="160"></canvas></div>
+        <div class="weather-text" id="wx-prog-text">--</div>
+        <div class="weather-detail" id="wx-prog-detail"></div>
+      </div>
+    </div>
+    <div class="weather-info">
+      <div class="card">
+        <div class="card-label">Luftdruck</div>
+        <div class="card-value" style="color:var(--pres)"><span id="wx-pres">--</span> <span class="card-unit">hPa</span></div>
+        <div class="card-trend" id="wx-pres-trend"></div>
+      </div>
+      <div class="card">
+        <div class="card-label">Luftfeuchtigkeit</div>
+        <div class="card-value" style="color:var(--hum)"><span id="wx-hum">--</span> <span class="card-unit">%</span></div>
+        <div class="card-trend" id="wx-hum-trend"></div>
+      </div>
+      <div class="card">
+        <div class="card-label">Temperatur</div>
+        <div class="card-value" style="color:var(--temp)"><span id="wx-temp">--</span> <span class="card-unit">°C</span></div>
+        <div class="card-trend" id="wx-temp-trend"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- History -->
+  <div id="tab-history" class="section">
+    <div class="chart-container">
+      <div class="chart-header">
+        <h3>Verlauf</h3>
+        <div class="chart-controls">
+          <button class="chart-btn active" data-hseries="temperature" style="color:var(--temp)">Temp</button>
+          <button class="chart-btn active" data-hseries="humidity" style="color:var(--hum)">Feuchte</button>
+          <button class="chart-btn" data-hseries="pressure" style="color:var(--pres)">Druck</button>
+          <button class="chart-btn" data-hseries="eco2" style="color:var(--co2)">eCO2</button>
+        </div>
+      </div>
+      <canvas id="history-chart"></canvas>
+    </div>
+    <div class="chart-controls" style="margin-top:8px">
+      <button class="chart-btn active" data-days="1">24h</button>
+      <button class="chart-btn" data-days="3">3 Tage</button>
+      <button class="chart-btn" data-days="7">7 Tage</button>
+    </div>
+  </div>
+
+  <!-- Settings -->
+  <div id="tab-settings" class="section">
+    <div class="settings-grid">
+      <div class="settings-card">
+        <h3>Allgemein</h3>
+        <div class="setting-row">
+          <div class="setting-left">
+            <div class="setting-label">UTC Offset (min)</div>
+            <div class="setting-desc">Zeitzone in Minuten (60 = CET)</div>
+          </div>
+          <input class="setting-input" id="s-utc_offset_min" type="number" min="-720" max="840">
+        </div>
+        <div class="setting-row">
+          <div class="setting-left">
+            <div class="setting-label">Log-Tage</div>
+            <div class="setting-desc">Wie viele Tage Daten behalten</div>
+          </div>
+          <input class="setting-input" id="s-log_days" type="number" min="1" max="30">
+        </div>
+      </div>
+
+      <div class="settings-card">
+        <h3>Sensor</h3>
+        <div class="setting-row">
+          <div class="setting-left">
+            <div class="setting-label">Sensor Intervall (ms)</div>
+            <div class="setting-desc">Leseintervall in Millisekunden</div>
+          </div>
+          <input class="setting-input" id="s-sensor_interval_ms" type="number" min="50" max="2000">
+        </div>
+        <div class="setting-row">
+          <div class="setting-left">
+            <div class="setting-label">Gas Intervall (s)</div>
+            <div class="setting-desc">eCO2/IAQ Messintervall</div>
+          </div>
+          <input class="setting-input" id="s-gas_interval_s" type="number" min="5" max="300">
+        </div>
+        <div class="setting-row">
+          <div class="setting-left">
+            <div class="setting-label">Heater-Filter</div>
+            <div class="setting-desc">Temperatur bei Gas-Messung ausblenden</div>
+          </div>
+          <div class="toggle" id="s-heater_filter" data-key="heater_filter"></div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-left">
+            <div class="setting-label">Heater Blanking (ms)</div>
+            <div class="setting-desc">Ausblendzeit nach Gas-Messung</div>
+          </div>
+          <input class="setting-input" id="s-heater_blanking_ms" type="number" min="250" max="6000">
+        </div>
+      </div>
+
+      <div class="settings-card">
+        <h3>Nachtmodus</h3>
+        <div class="setting-row">
+          <div class="setting-left">
+            <div class="setting-label">Automatisch</div>
+            <div class="setting-desc">Nachtmodus nach Zeitplan</div>
+          </div>
+          <div class="toggle" id="s-night_mode_auto" data-key="night_mode_auto"></div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-left">
+            <div class="setting-label">Start (Uhr)</div>
+            <div class="setting-desc">Nachtmodus Beginn</div>
+          </div>
+          <input class="setting-input" id="s-night_start_h" type="number" min="0" max="23">
+        </div>
+        <div class="setting-row">
+          <div class="setting-left">
+            <div class="setting-label">Ende (Uhr)</div>
+            <div class="setting-desc">Nachtmodus Ende</div>
+          </div>
+          <input class="setting-input" id="s-night_end_h" type="number" min="0" max="23">
+        </div>
+        <div class="setting-row">
+          <div class="setting-left">
+            <div class="setting-label">Helligkeit (%)</div>
+            <div class="setting-desc">Display-Helligkeit nachts</div>
+          </div>
+          <input class="setting-input" id="s-night_brightness" type="number" min="10" max="100">
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:16px">
+      <button class="btn-save" id="btn-save-settings">Einstellungen speichern</button>
+      <span class="save-status" id="save-status"></span>
+    </div>
+  </div>
+</div>
+
+<script>
+// --- State ---
+let liveData = null;
+let historyData = [];
+let historyDays = 1;
+let liveSeries = { temperature: true, humidity: true, pressure: true };
+let historySeries = { temperature: true, humidity: true, pressure: false, eco2: false };
+let liveChartW = 0, liveChartH = 0;  // cached canvas size to avoid flicker
+let histChartW = 0, histChartH = 0;
+
+// --- Safe min/max for large arrays (avoids stack overflow) ---
+function arrMin(arr) {
+  let m = Infinity;
+  for (let i = 0; i < arr.length; i++) if (arr[i] < m) m = arr[i];
+  return m;
+}
+function arrMax(arr) {
+  let m = -Infinity;
+  for (let i = 0; i < arr.length; i++) if (arr[i] > m) m = arr[i];
+  return m;
+}
+
+// --- Weather icon drawing (canvas, matching SDL2 app style) ---
+function drawWeatherIcon(canvas, iconName, tintColor) {
+  const ctx = canvas.getContext('2d');
+  const s = canvas.width;  // 160
+  const cx = s / 2, cy = s / 2, r = s * 0.28;
+  ctx.clearRect(0, 0, s, s);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  function fillCircle(x, y, rad, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.arc(x, y, rad, 0, Math.PI * 2); ctx.fill();
+  }
+  function drawCloud(x, y, rad, color) {
+    ctx.fillStyle = color;
+    fillCircle(x - rad * 0.4, y, rad * 0.55, color);
+    fillCircle(x + rad * 0.4, y, rad * 0.5, color);
+    fillCircle(x, y - rad * 0.3, rad * 0.6, color);
+    ctx.fillRect(x - rad * 0.8, y, rad * 1.6, rad * 0.5);
+  }
+
+  switch (iconName) {
+    case 'sun':
+      fillCircle(cx, cy, r, '#FFD060');
+      break;
+    case 'sun_rays':
+      fillCircle(cx, cy, r, '#FFD060');
+      ctx.strokeStyle = '#FFD060'; ctx.lineWidth = 3;
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        const x1 = cx + Math.cos(a) * (r + 6);
+        const y1 = cy + Math.sin(a) * (r + 6);
+        const x2 = cx + Math.cos(a) * (r + 14);
+        const y2 = cy + Math.sin(a) * (r + 14);
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+      }
+      break;
+    case 'sun_cloud':
+      fillCircle(cx + r * 0.3, cy - r * 0.5, r * 0.7, '#FFD060');
+      drawCloud(cx - r * 0.1, cy + r * 0.2, r, '#b0b8c8');
+      break;
+    case 'cloud':
+      drawCloud(cx, cy, r * 1.1, '#8890a0');
+      break;
+    case 'rain':
+      drawCloud(cx, cy - r * 0.3, r, '#8890a0');
+      ctx.strokeStyle = '#50a0ff'; ctx.lineWidth = 2.5;
+      for (let i = -1; i <= 1; i++) {
+        const dx = cx + i * r * 0.5;
+        ctx.beginPath();
+        ctx.moveTo(dx, cy + r * 0.4);
+        ctx.lineTo(dx - 4, cy + r * 0.9);
+        ctx.stroke();
+      }
+      break;
+    case 'storm':
+      drawCloud(cx, cy - r * 0.4, r, '#606878');
+      // Lightning bolt
+      ctx.fillStyle = '#FFE040'; ctx.strokeStyle = '#FFE040'; ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(cx + 2, cy - r * 0.05);
+      ctx.lineTo(cx - r * 0.3, cy + r * 0.4);
+      ctx.lineTo(cx + 2, cy + r * 0.35);
+      ctx.lineTo(cx - r * 0.15, cy + r * 0.85);
+      ctx.stroke();
+      // Rain drops
+      ctx.strokeStyle = '#6498ff'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(cx - r * 0.55, cy + r * 0.2); ctx.lineTo(cx - r * 0.65, cy + r * 0.55); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx + r * 0.55, cy + r * 0.2); ctx.lineTo(cx + r * 0.45, cy + r * 0.55); ctx.stroke();
+      break;
+    case 'stable':
+    default:
+      ctx.strokeStyle = tintColor || '#a0b0c0'; ctx.lineWidth = 3;
+      const aw = r;
+      ctx.beginPath(); ctx.moveTo(cx - aw, cy); ctx.lineTo(cx + aw, cy); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(cx + aw, cy);
+      ctx.lineTo(cx + aw - r * 0.4, cy - r * 0.3);
+      ctx.moveTo(cx + aw, cy);
+      ctx.lineTo(cx + aw - r * 0.4, cy + r * 0.3);
+      ctx.stroke();
+      break;
+  }
+}
+
+// --- Tabs ---
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+    if (tab.dataset.tab === 'history') fetchHistory();
+    if (tab.dataset.tab === 'settings') loadSettings();
+    if (tab.dataset.tab === 'dashboard') drawLiveChart();
+  });
+});
+
+// --- Live chart series toggle ---
+document.querySelectorAll('[data-series]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    btn.classList.toggle('active');
+    liveSeries[btn.dataset.series] = btn.classList.contains('active');
+    drawLiveChart();
+  });
+});
+
+// --- History chart series toggle ---
+document.querySelectorAll('[data-hseries]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    btn.classList.toggle('active');
+    historySeries[btn.dataset.hseries] = btn.classList.contains('active');
+    drawHistoryChart();
+  });
+});
+
+// --- History days toggle ---
+document.querySelectorAll('[data-days]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-days]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    historyDays = parseInt(btn.dataset.days);
+    fetchHistory();
+  });
+});
+
+// --- Toggle switches ---
+document.querySelectorAll('.toggle').forEach(toggle => {
+  toggle.addEventListener('click', () => toggle.classList.toggle('on'));
+});
+
+// --- Trend arrow ---
+function trendArrow(val, threshold) {
+  if (val > threshold * 2) return { arrow: '\u2191', cls: 'trend-up' };
+  if (val > threshold) return { arrow: '\u2197', cls: 'trend-up' };
+  if (val < -threshold * 2) return { arrow: '\u2193', cls: 'trend-down' };
+  if (val < -threshold) return { arrow: '\u2198', cls: 'trend-down' };
+  return { arrow: '\u2192', cls: 'trend-stable' };
+}
+
+// --- Fetch live data ---
+async function fetchLive() {
+  try {
+    const resp = await fetch('/api/live');
+    if (!resp.ok) throw new Error('offline');
+    liveData = await resp.json();
+    updateDashboard();
+    updateWeather();
+  } catch (e) {
+    const badge = document.getElementById('status-badge');
+    badge.textContent = 'Offline';
+    badge.className = 'status-badge status-offline';
+  }
+}
+
+function updateDashboard() {
+  if (!liveData) return;
+  const c = liveData.current;
+  const tr = liveData.trends;
+
+  document.getElementById('v-temp').textContent = c.temperature.toFixed(1);
+  document.getElementById('v-hum').textContent = c.humidity.toFixed(1);
+  document.getElementById('v-pres').textContent = c.pressure.toFixed(1);
+  document.getElementById('v-co2').textContent = Math.round(c.eco2);
+
+  // Trends (per second -> per minute / per hour for display)
+  const tt = trendArrow(tr.temperature, 0.001);
+  const th = trendArrow(tr.humidity, 0.005);
+  const tp = trendArrow(tr.pressure, 0.0005);
+
+  document.getElementById('t-temp').innerHTML =
+    `<span class="${tt.cls}">${tt.arrow} ${(tr.temperature * 60).toFixed(2)} °C/min</span>`;
+  document.getElementById('t-hum').innerHTML =
+    `<span class="${th.cls}">${th.arrow} ${(tr.humidity * 60).toFixed(2)} %/min</span>`;
+  document.getElementById('t-pres').innerHTML =
+    `<span class="${tp.cls}">${tp.arrow} ${(tr.pressure * 3600).toFixed(2)} hPa/h</span>`;
+  document.getElementById('t-iaq').innerHTML =
+    `<span style="color:var(--dim)">IAQ: ${c.iaq.toFixed(0)} | eCO2</span>`;
+
+  // Status badge
+  const badge = document.getElementById('status-badge');
+  if (liveData.demo_mode) {
+    badge.textContent = 'Demo';
+    badge.className = 'status-badge status-demo';
+  } else if (liveData.sensor_ok) {
+    badge.textContent = 'Live';
+    badge.className = 'status-badge status-live';
+  } else {
+    badge.textContent = 'Sensor-Fehler';
+    badge.className = 'status-badge status-offline';
+  }
+
+  // Timestamp
+  document.getElementById('timestamp').textContent = liveData.timestamp.replace('T', ' ');
+
+  // Only draw chart if dashboard tab is visible
+  if (document.getElementById('tab-dashboard').classList.contains('active')) {
+    drawLiveChart();
+  }
+}
+
+function updateWeather() {
+  if (!liveData || !liveData.weather) return;
+  const wx = liveData.weather;
+  const c = liveData.current;
+  const tr = liveData.trends;
+
+  // Draw weather icons on canvas
+  drawWeatherIcon(document.getElementById('wx-now-canvas'), wx.jetzt.icon);
+  drawWeatherIcon(document.getElementById('wx-prog-canvas'), wx.prognose.icon);
+
+  document.getElementById('wx-now-text').textContent = wx.jetzt.text;
+  document.getElementById('wx-now-detail').textContent = wx.jetzt.detail;
+  document.getElementById('wx-prog-text').textContent = wx.prognose.text;
+  document.getElementById('wx-prog-detail').textContent = wx.prognose.detail;
+
+  // Info cards
+  document.getElementById('wx-pres').textContent = c.pressure.toFixed(1);
+  document.getElementById('wx-hum').textContent = c.humidity.toFixed(1);
+  document.getElementById('wx-temp').textContent = c.temperature.toFixed(1);
+
+  const tp = trendArrow(tr.pressure, 0.0005);
+  const th = trendArrow(tr.humidity, 0.005);
+  const tt = trendArrow(tr.temperature, 0.001);
+  document.getElementById('wx-pres-trend').innerHTML =
+    `<span class="${tp.cls}">${tp.arrow} ${(tr.pressure * 3600).toFixed(2)} hPa/h</span>`;
+  document.getElementById('wx-hum-trend').innerHTML =
+    `<span class="${th.cls}">${th.arrow} ${(tr.humidity * 60).toFixed(2)} %/min</span>`;
+  document.getElementById('wx-temp-trend').innerHTML =
+    `<span class="${tt.cls}">${tt.arrow} ${(tr.temperature * 60).toFixed(2)} °C/min</span>`;
+}
+
+// --- Setup canvas with correct DPR ---
+function setupCanvas(canvas, cssW, cssH) {
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = cssW * dpr;
+  canvas.height = cssH * dpr;
+  canvas.style.width = cssW + 'px';
+  canvas.style.height = cssH + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  return { ctx, w: cssW, h: cssH };
+}
+
+// --- Draw live chart ---
+function drawLiveChart() {
+  if (!liveData || !liveData.history) return;
+  const canvas = document.getElementById('live-chart');
+  const rect = canvas.parentElement.getBoundingClientRect();
+  const cssW = rect.width - 32;  // padding
+  const cssH = 280;
+
+  // Only resize canvas if dimensions actually changed (prevents flicker)
+  const { ctx, w, h } = setupCanvas(canvas, cssW, cssH);
+
+  ctx.fillStyle = '#1e1e2a';
+  ctx.fillRect(0, 0, w, h);
+
+  const margin = { top: 12, right: 65, bottom: 28, left: 55 };
+  const pw = w - margin.left - margin.right;
+  const ph = h - margin.top - margin.bottom;
+  if (pw < 20 || ph < 20) return;
+
+  const seriesDef = [
+    { key: 'temperature', color: '#ff6450', unit: '°C', side: 'left' },
+    { key: 'humidity', color: '#50b4ff', unit: '%', side: 'right' },
+    { key: 'pressure', color: '#78dc8c', unit: 'hPa', side: 'right' },
+  ].filter(s => liveSeries[s.key]);
+
+  // Draw grid lines
+  ctx.strokeStyle = '#282840';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = margin.top + (ph * i / 4);
+    ctx.beginPath(); ctx.moveTo(margin.left, y); ctx.lineTo(w - margin.right, y); ctx.stroke();
+  }
+  // Vertical grid
+  for (let i = 0; i <= 6; i++) {
+    const x = margin.left + (pw * i / 6);
+    ctx.beginPath(); ctx.moveTo(x, margin.top); ctx.lineTo(x, margin.top + ph); ctx.stroke();
+  }
+
+  // Assign Y axes: first series left, rest stagger on right
+  let rightIdx = 0;
+  seriesDef.forEach(s => {
+    const data = liveData.history[s.key];
+    if (!data || data.length < 2) return;
+    const dataMin = arrMin(data);
+    const dataMax = arrMax(data);
+    const pad = (dataMax - dataMin) * 0.1 || 0.5;
+    const min = dataMin - pad;
+    const max = dataMax + pad;
+    const range = max - min || 1;
+
+    // Draw line
+    ctx.strokeStyle = s.color;
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    data.forEach((v, i) => {
+      const x = margin.left + (i / (data.length - 1)) * pw;
+      const y = margin.top + ph - ((v - min) / range) * ph;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // Y-axis labels
+    const isLeft = s.side === 'left' && seriesDef.indexOf(s) === 0;
+    ctx.fillStyle = s.color;
+    ctx.font = '11px system-ui, sans-serif';
+
+    if (isLeft) {
+      ctx.textAlign = 'right';
+      ctx.fillText(max.toFixed(1) + s.unit, margin.left - 6, margin.top + 10);
+      ctx.fillText(min.toFixed(1) + s.unit, margin.left - 6, h - margin.bottom - 2);
+    } else {
+      ctx.textAlign = 'left';
+      const yOff = rightIdx * 14;
+      ctx.fillText(max.toFixed(1) + s.unit, w - margin.right + 6, margin.top + 10 + yOff);
+      ctx.fillText(min.toFixed(1) + s.unit, w - margin.right + 6, h - margin.bottom - 2 - yOff);
+      rightIdx++;
+    }
+  });
+
+  // X-axis labels
+  ctx.fillStyle = '#8c8ca0';
+  ctx.font = '11px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('\u2190 60s', margin.left + 20, h - 4);
+  ctx.fillText('jetzt', w - margin.right - 10, h - 4);
+}
+
+// --- Fetch history ---
+async function fetchHistory() {
+  try {
+    const resp = await fetch('/api/history?days=' + historyDays);
+    historyData = await resp.json();
+    drawHistoryChart();
+  } catch (e) { console.error('History fetch error:', e); }
+}
+
+// --- Draw history chart ---
+function drawHistoryChart() {
+  const canvas = document.getElementById('history-chart');
+  const rect = canvas.parentElement.getBoundingClientRect();
+  const cssW = rect.width - 32;
+  const cssH = 350;
+  const { ctx, w, h } = setupCanvas(canvas, cssW, cssH);
+
+  ctx.fillStyle = '#1e1e2a';
+  ctx.fillRect(0, 0, w, h);
+
+  if (!historyData || historyData.length === 0) {
+    ctx.fillStyle = '#8c8ca0';
+    ctx.font = '14px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Keine Verlaufsdaten', w / 2, h / 2);
+    return;
+  }
+
+  const margin = { top: 12, right: 70, bottom: 36, left: 55 };
+  const pw = w - margin.left - margin.right;
+  const ph = h - margin.top - margin.bottom;
+  if (pw < 20 || ph < 20) return;
+
+  const colors = { temperature: '#ff6450', humidity: '#50b4ff', pressure: '#78dc8c', eco2: '#ffc83c' };
+  const units = { temperature: '°C', humidity: '%', pressure: 'hPa', eco2: 'ppm' };
+
+  // Sort by date+time
+  const sorted = [...historyData].sort((a, b) => {
+    if (a.date !== b.date) return a.date.localeCompare(b.date);
+    return a.minute - b.minute;
+  });
+  if (sorted.length < 2) return;
+
+  // Grid
+  ctx.strokeStyle = '#282840';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = margin.top + (ph * i / 4);
+    ctx.beginPath(); ctx.moveTo(margin.left, y); ctx.lineTo(w - margin.right, y); ctx.stroke();
+  }
+  for (let i = 0; i <= 8; i++) {
+    const x = margin.left + (pw * i / 8);
+    ctx.beginPath(); ctx.moveTo(x, margin.top); ctx.lineTo(x, margin.top + ph); ctx.stroke();
+  }
+
+  // Draw each active series
+  let leftUsed = false;
+  let rightIdx = 0;
+  const activeKeys = Object.keys(historySeries).filter(k => historySeries[k]);
+
+  activeKeys.forEach(key => {
+    const vals = sorted.map(d => d[key]).filter(v => v !== undefined && v !== null);
+    if (vals.length < 2) return;
+    const dataMin = arrMin(vals);
+    const dataMax = arrMax(vals);
+    const pad = (dataMax - dataMin) * 0.05 || (key === 'pressure' ? 0.5 : 1);
+    const min = dataMin - pad;
+    const max = dataMax + pad;
+    const range = max - min || 1;
+
+    ctx.strokeStyle = colors[key];
+    ctx.lineWidth = 1.5;
+    ctx.lineJoin = 'round';
+    ctx.globalAlpha = 0.9;
+    ctx.beginPath();
+    let first = true;
+    let idx = 0;
+    sorted.forEach((d) => {
+      if (d[key] === undefined || d[key] === null) return;
+      const x = margin.left + (idx / (vals.length - 1)) * pw;
+      const y = margin.top + ph - ((d[key] - min) / range) * ph;
+      first ? (ctx.moveTo(x, y), first = false) : ctx.lineTo(x, y);
+      idx++;
+    });
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // Y-axis labels
+    const dec = key === 'eco2' ? 0 : 1;
+    ctx.fillStyle = colors[key];
+    ctx.font = '10px system-ui, sans-serif';
+
+    if (!leftUsed) {
+      leftUsed = true;
+      ctx.textAlign = 'right';
+      ctx.fillText(max.toFixed(dec) + units[key], margin.left - 6, margin.top + 10);
+      ctx.fillText(min.toFixed(dec) + units[key], margin.left - 6, h - margin.bottom - 2);
+    } else {
+      ctx.textAlign = 'left';
+      const yOff = rightIdx * 14;
+      ctx.fillText(max.toFixed(dec) + units[key], w - margin.right + 6, margin.top + 10 + yOff);
+      ctx.fillText(min.toFixed(dec) + units[key], w - margin.right + 6, h - margin.bottom - 2 - yOff);
+      rightIdx++;
+    }
+  });
+
+  // X-axis labels
+  ctx.fillStyle = '#8c8ca0';
+  ctx.font = '10px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  const labelCount = Math.min(8, sorted.length);
+  const step = Math.max(1, Math.floor((sorted.length - 1) / (labelCount - 1)));
+  for (let i = 0; i < sorted.length; i += step) {
+    const x = margin.left + (i / (sorted.length - 1)) * pw;
+    const d = sorted[i];
+    const label = historyDays <= 1 ? d.time : d.date.substring(5) + ' ' + d.time;
+    ctx.fillText(label, x, h - margin.bottom + 14);
+  }
+  // Always show last label
+  if (sorted.length > 1) {
+    const lastX = margin.left + pw;
+    const last = sorted[sorted.length - 1];
+    const lastLabel = historyDays <= 1 ? last.time : last.date.substring(5) + ' ' + last.time;
+    ctx.fillText(lastLabel, lastX, h - margin.bottom + 14);
+  }
+}
+
+// --- Settings ---
+async function loadSettings() {
+  try {
+    const resp = await fetch('/api/settings');
+    const settings = await resp.json();
+    Object.entries(settings).forEach(([key, val]) => {
+      const el = document.getElementById('s-' + key);
+      if (!el) return;
+      if (el.classList.contains('toggle')) {
+        el.classList.toggle('on', val === '1');
+      } else {
+        el.value = val;
+      }
+    });
+  } catch (e) { console.error('Settings load error:', e); }
+}
+
+document.getElementById('btn-save-settings').addEventListener('click', async () => {
+  const updates = {};
+  document.querySelectorAll('.setting-input').forEach(input => {
+    const key = input.id.replace('s-', '');
+    updates[key] = input.value;
+  });
+  document.querySelectorAll('.toggle').forEach(toggle => {
+    const key = toggle.dataset.key;
+    if (key) updates[key] = toggle.classList.contains('on') ? 1 : 0;
+  });
+
+  const status = document.getElementById('save-status');
+  try {
+    const resp = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates)
+    });
+    const result = await resp.json();
+    if (result.ok) {
+      status.textContent = 'Gespeichert!';
+      status.style.color = 'var(--pres)';
+    } else {
+      status.textContent = 'Fehler: ' + (result.error || 'Unbekannt');
+      status.style.color = 'var(--temp)';
+    }
+  } catch (e) {
+    status.textContent = 'Verbindungsfehler';
+    status.style.color = 'var(--temp)';
+  }
+  setTimeout(() => { status.textContent = ''; }, 3000);
+});
+
+// --- Polling ---
+fetchLive();
+setInterval(fetchLive, 2000);
+
+// Redraw charts on resize (debounced)
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    drawLiveChart();
+    if (document.getElementById('tab-history').classList.contains('active')) drawHistoryChart();
+  }, 150);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+# Build
+bme688-monitor
+*.o
+
+# Runtime data
+data/
+web_data.json
+web_data.json.tmp
+sensor_retries.txt
+settings_reload
+
+# Python
+__pycache__/
+*.pyc
+
+# IDE
+.vscode/
+*.swp
