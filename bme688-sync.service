@@ -1,0 +1,17 @@
+[Unit]
+Description=BME688 Railway Sync
+After=network-online.target bme688-web.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=luka
+WorkingDirectory=/home/luka/bme688-monitor/railway
+Environment=RAILWAY_URL=https://DEIN-APP.up.railway.app
+Environment=BME688_API_KEY=DEIN_KEY_HIER
+ExecStart=/usr/bin/python3 /home/luka/bme688-monitor/railway/sync.py
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
