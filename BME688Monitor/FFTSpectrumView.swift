@@ -125,92 +125,53 @@ struct FFTSpectrumView: View {
 
     @ViewBuilder
     private func chartBody(data: [Double], freqRes: Double) -> some View {
-        let stops = gradientStops(for: colorScheme)
+        let lineWidth: CGFloat = colorScheme == .klassik ? 1.5 : 1.2
+        let curLineColor: Color = lineColor
+        let curAreaGradient: LinearGradient = areaStyle(stops: gradientStops(for: colorScheme))
+        let showCursor = cursorFreq != nil && cursorOpacity > 0
+        let safeCursorFreq = cursorFreq ?? 0
 
         Chart {
             ForEach(1..<data.count, id: \.self) { i in
-                let freq = Double(i) * freqRes
                 AreaMark(
-                    x: .value("Freq", freq),
+                    x: .value("Freq", Double(i) * freqRes),
                     yStart: .value("Base", -80.0),
                     yEnd: .value("dB", data[i])
                 )
-                .foregroundStyle(areaStyle(stops: stops))
+                .foregroundStyle(curAreaGradient)
+
                 LineMark(
-                    x: .value("Freq", freq),
+                    x: .value("Freq", Double(i) * freqRes),
                     y: .value("dB", data[i])
                 )
-                .foregroundStyle(lineColor)
-                .lineStyle(StrokeStyle(lineWidth: colorScheme == .klassik ? 1.5 : 1.2))
+                .foregroundStyle(curLineColor)
+                .lineStyle(StrokeStyle(lineWidth: lineWidth))
             }
 
-            // Cursor rule mark
-            if let freq = cursorFreq, cursorOpacity > 0 {
-                RuleMark(x: .value("Cursor", freq))
-                    .foregroundStyle(.white.opacity(0.6 * cursorOpacity))
+            if showCursor {
+                RuleMark(x: .value("Cursor", safeCursorFreq))
+                    .foregroundStyle(Color.white.opacity(0.6 * cursorOpacity))
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 3]))
-                    .annotation(position: .top, alignment: .center) {
-                        cursorLabel(data: data, freqRes: freqRes, freq: freq)
-                            .opacity(cursorOpacity)
-                    }
             }
         }
         .chartYScale(domain: -80...0)
         .spectrumAxes()
         .chartLegend(.hidden)
-        .chartOverlay { proxy in
-            GeometryReader { geo in
-                Rectangle()
-                    .fill(Color.clear)
-                    .contentShape(Rectangle())
-                    .gesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { value in
-                                let origin = geo[proxy.plotFrame!].origin
-                                let x = value.location.x - origin.x
-                                if let freq: Double = proxy.value(atX: x) {
-                                    cursorFreq = freq
-                                    withAnimation(.easeIn(duration: 0.1)) {
-                                        cursorOpacity = 1.0
-                                    }
-                                }
-                            }
-                            .onEnded { _ in
-                                withAnimation(.easeOut(duration: 3.0)) {
-                                    cursorOpacity = 0
-                                }
-                            }
-                    )
+        .overlay(alignment: .topLeading) {
+            if showCursor {
+                cursorOverlay(data: data, freqRes: freqRes)
             }
         }
-    }
-
-    private var lineColor: Color {
-        switch colorScheme {
-        case .klassik: return .orange
-        case .thermal, .neon: return .white.opacity(0.55)
+        .chartOverlay { proxy in
+            chartGestureOverlay(proxy: proxy, data: data, freqRes: freqRes)
         }
     }
-
-    private func areaStyle(stops: [Gradient.Stop]) -> LinearGradient {
-        switch colorScheme {
-        case .klassik:
-            return LinearGradient(
-                colors: [Color.orange.opacity(0.4), Color.orange.opacity(0.02)],
-                startPoint: .top, endPoint: .bottom
-            )
-        default:
-            return LinearGradient(stops: stops, startPoint: .bottom, endPoint: .top)
-        }
-    }
-
-    // MARK: - Cursor label
 
     @ViewBuilder
-    private func cursorLabel(data: [Double], freqRes: Double, freq: Double) -> some View {
-        let bin = Int(round(freq / freqRes))
-        let clampedBin = max(1, min(bin, data.count - 1))
-        let db = data[clampedBin]
+    private func cursorOverlay(data: [Double], freqRes: Double) -> some View {
+        let freq = cursorFreq ?? 0
+        let bin = max(1, min(Int(round(freq / freqRes)), data.count - 1))
+        let db = data[bin]
         let period = freq > 0.001 ? 1.0 / freq : Double.infinity
 
         VStack(spacing: 2) {
@@ -232,6 +193,54 @@ struct FFTSpectrumView: View {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(.ultraThinMaterial)
                 .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
+        }
+        .opacity(cursorOpacity)
+        .padding(8)
+    }
+
+    private func chartGestureOverlay(proxy: ChartProxy, data: [Double], freqRes: Double) -> some View {
+        GeometryReader { geo in
+            Rectangle()
+                .fill(Color.clear)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            guard let plotFrame = proxy.plotFrame else { return }
+                            let origin = geo[plotFrame].origin
+                            let x = value.location.x - origin.x
+                            if let freq: Double = proxy.value(atX: x) {
+                                cursorFreq = freq
+                                withAnimation(.easeIn(duration: 0.1)) {
+                                    cursorOpacity = 1.0
+                                }
+                            }
+                        }
+                        .onEnded { _ in
+                            withAnimation(.easeOut(duration: 3.0)) {
+                                cursorOpacity = 0
+                            }
+                        }
+                )
+        }
+    }
+
+    private var lineColor: Color {
+        switch colorScheme {
+        case .klassik: return .orange
+        case .thermal, .neon: return .white.opacity(0.55)
+        }
+    }
+
+    private func areaStyle(stops: [Gradient.Stop]) -> LinearGradient {
+        switch colorScheme {
+        case .klassik:
+            return LinearGradient(
+                colors: [Color.orange.opacity(0.4), Color.orange.opacity(0.02)],
+                startPoint: .top, endPoint: .bottom
+            )
+        default:
+            return LinearGradient(stops: stops, startPoint: .bottom, endPoint: .top)
         }
     }
 
