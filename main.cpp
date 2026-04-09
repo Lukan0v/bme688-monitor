@@ -3138,14 +3138,16 @@ int main(int argc, char* argv[]) {
             Color sync_col = sync_online ? Color{80, 220, 120, 255} : Color{180, 60, 60, 200};
             const char* sync_lbl = sync_online ? "Online" : "Offline";
             // Small dot
+            // Place after clock: clock at win_w-516, ~56px wide → sync at win_w-580
+            int sync_x = win_w - 600;
             SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
             set_color(renderer, sync_col);
             for (int dy = -3; dy <= 3; dy++) {
                 int dx = (int)sqrt(9 - dy * dy);
-                SDL_RenderDrawLine(renderer, win_w - 460, 28 + dy, win_w - 460 + dx * 2, 28 + dy);
+                SDL_RenderDrawLine(renderer, sync_x, 28 + dy, sync_x + dx * 2, 28 + dy);
             }
             SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
-            draw_text(renderer, font_small, sync_lbl, win_w - 448, 22, sync_col);
+            draw_text(renderer, font_small, sync_lbl, sync_x + 12, 22, sync_col);
         }
 
         // Power save button - shows target mode immediately
