@@ -155,7 +155,30 @@ struct FFTSpectrumView: View {
             }
         }
         .chartYScale(domain: -80...0)
-        .spectrumAxes()
+        .chartXAxis {
+            AxisMarks(values: .automatic(desiredCount: 6)) { value in
+                AxisValueLabel {
+                    if let v = value.as(Double.self) {
+                        Text(String(format: "%.2f", v))
+                            .font(.caption2)
+                    }
+                }
+                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.3, dash: [4]))
+                    .foregroundStyle(.secondary.opacity(0.3))
+            }
+        }
+        .chartYAxis {
+            AxisMarks(values: [-80, -60, -40, -20, 0]) { value in
+                AxisValueLabel {
+                    if let v = value.as(Int.self) {
+                        Text("\(v) dB")
+                            .font(.caption2)
+                    }
+                }
+                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.3, dash: [4]))
+                    .foregroundStyle(.secondary.opacity(0.3))
+            }
+        }
         .chartLegend(.hidden)
         .overlay(alignment: .topLeading) {
             if showCursor {
@@ -361,34 +384,3 @@ struct FFTSpectrumView: View {
     }
 }
 
-// MARK: - Chart axis modifier
-
-extension Chart {
-    func spectrumAxes() -> some View {
-        self
-            .chartXAxis {
-                AxisMarks(values: .automatic(desiredCount: 6)) { value in
-                    AxisValueLabel {
-                        if let v = value.as(Double.self) {
-                            Text(String(format: "%.2f", v))
-                                .font(.caption2)
-                        }
-                    }
-                    AxisGridLine(stroke: StrokeStyle(lineWidth: 0.3, dash: [4]))
-                        .foregroundStyle(.secondary.opacity(0.3))
-                }
-            }
-            .chartYAxis {
-                AxisMarks(values: [-80, -60, -40, -20, 0]) { value in
-                    AxisValueLabel {
-                        if let v = value.as(Int.self) {
-                            Text("\(v) dB")
-                                .font(.caption2)
-                        }
-                    }
-                    AxisGridLine(stroke: StrokeStyle(lineWidth: 0.3, dash: [4]))
-                        .foregroundStyle(.secondary.opacity(0.3))
-                }
-            }
-    }
-}
